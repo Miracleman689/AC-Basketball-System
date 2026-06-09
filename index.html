@@ -19,6 +19,7 @@
             #print-report-area, #print-report-area * { visibility: visible; }
             #print-report-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; background: white; color: black; padding: 15mm; box-sizing: border-box; }
             .no-print { display: none !important; }
+            textarea { border: none !important; resize: none !important; background: transparent !important; padding: 0 !important; }
         }
         .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; font-weight: bold; }
         .profile-image-container { position: relative; }
@@ -807,6 +808,8 @@
                     overlayHTML = `<div class="status-overlay text-red-500">ลาออก</div>`;
                 }
 
+                // ตัดเวลาออก แสดงเฉพาะ YYYY-MM-DD
+                const cleanBirth = p.birth ? p.birth.split('T')[0] : 'ไม่ระบุ';
                 const stats = getPlayerWeeklyStats(p.id, workingDays);
                 const totalChecked = stats.m + stats.k + stats.l + stats.h;
 
@@ -821,7 +824,7 @@
                                 <div class="flex-1 min-w-0">
                                     <h4 class="font-bold text-gray-800 text-sm truncate">No.${p.no || '-'} ${p.name}</h4>
                                     <p class="text-xs text-gray-600 font-medium">ชื่อเล่น: ${p.nickname} | รุ่น: U${p.u}</p>
-                                    <p class="text-[11px] text-gray-400">วันเกิด: ${p.birth || '-'}</p>
+                                    <p class="text-[11px] text-gray-400">วันเกิด: ${cleanBirth}</p>
                                 </div>
                             </div>
 
@@ -906,7 +909,9 @@
             document.getElementById('edit-profile-nickname').value = p.nickname;
             document.getElementById('edit-profile-number').value = p.no || '';
             document.getElementById('edit-profile-u').value = p.u;
-            document.getElementById('edit-profile-birth').value = p.birth || '';
+            
+            const cleanBirth = p.birth ? p.birth.split('T')[0] : '';
+            document.getElementById('edit-profile-birth').value = cleanBirth;
             
             const previewImg = document.getElementById('edit-profile-preview');
             const placeholderIcon = document.getElementById('edit-profile-icon-placeholder');
@@ -989,6 +994,9 @@
                 return '#E5E7EB';
             });
 
+            // ล้างฟอร์แมตวันเกิดดึงแค่ YYYY-MM-DD ป้องกันปัญหาเวลาต่อท้าย
+            const reportBirthClean = p.birth ? p.birth.split('T')[0] : 'ไม่ระบุ';
+
             area.innerHTML = `
                 <div class="space-y-6 text-black">
                     <div class="flex justify-between items-center border-b-4 border-gray-800 pb-4">
@@ -1010,7 +1018,7 @@
                             <div><span class="text-gray-500 font-medium">ชื่อเล่น:</span> <strong class="text-base text-gray-900">${p.nickname}</strong></div>
                             <div><span class="text-gray-500 font-medium">หมายเลขเสื้อ:</span> <strong class="text-base text-red-600">No.${p.no || '-'}</strong></div>
                             <div><span class="text-gray-500 font-medium">รุ่นอายุกลุ่มนักกีฬา:</span> <span class="bg-gray-200 px-2 py-0.5 rounded font-bold text-xs">U${p.u}</span></div>
-                            <div class="md:col-span-2"><span class="text-gray-500 font-medium">วันเดือนปีเกิด:</span> <strong class="text-gray-900">${p.birth || 'ไม่ระบุ'}</strong></div>
+                            <div class="md:col-span-2"><span class="text-gray-500 font-medium">วันเดือนปีเกิด:</span> <strong class="text-gray-900">${reportBirthClean}</strong></div>
                             <div class="md:col-span-2 text-indigo-600 font-semibold text-xs border-t pt-2 mt-1">
                                 <i class="fa-solid fa-calendar-days"></i> ช่วงการตรวจสอบสัปดาห์ปัจจุบัน: ${workingDays[0]} ถึง ${workingDays[4]}
                             </div>
@@ -1036,7 +1044,7 @@
                         <div class="text-gray-400">วันหยุดสโมสร: ${stats.h} วัน</div>
                     </div>
 
-                    <!-- ส่วนเพิ่มเติมกล่องคอมเม้นท์ใต้แถบสีดำ -->
+                    <!-- คอมเม้นท์บล็อก ล็อกไม่ให้เรนเดอร์เวอร์ชันเก่าทับ -->
                     <div class="border border-gray-300 rounded-xl p-4 bg-gray-50 space-y-2">
                         <div class="flex justify-between items-center border-b pb-1">
                             <h4 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-comment-medical text-red-600"></i> ความคิดเห็น/ข้อเสนอแนะจากผู้ฝึกสอน (ให้นักกีฬานำไปปรับปรุงแก้ไข)</h4>
