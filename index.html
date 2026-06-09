@@ -92,6 +92,7 @@
             <input type="date" id="currentAttendanceDateMobile" class="bg-gray-100 px-3 py-1 rounded border border-gray-300 cursor-pointer" onchange="changeAttendanceDate(this.value)">
         </div>
 
+        <!-- Dashboard Section -->
         <section id="tab-dashboard" class="tab-content block space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-xl shadow-sm gap-4">
                 <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -149,6 +150,7 @@
             </div>
         </section>
 
+        <!-- Attendance Section -->
         <section id="tab-attendance" class="tab-content hidden space-y-4">
             <div class="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
                 <div class="flex items-center space-x-2 w-full md:w-auto">
@@ -193,6 +195,7 @@
             </div>
         </section>
 
+        <!-- Players Section -->
         <section id="tab-players" class="tab-content hidden space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm h-fit space-y-6">
@@ -276,6 +279,7 @@
             </div>
         </section>
 
+        <!-- QR Scan Section -->
         <section id="tab-qr-scan" class="tab-content hidden max-w-md mx-auto">
             <div class="bg-white p-6 rounded-2xl shadow-md text-center space-y-5 border">
                 <div class="flex justify-between items-center">
@@ -296,6 +300,7 @@
             </div>
         </section>
 
+        <!-- Profiles Section -->
         <section id="tab-profiles" class="tab-content hidden space-y-4">
             <div class="bg-white p-4 rounded-xl shadow-sm mb-2">
                 <p class="text-sm text-gray-600 font-semibold"><i class="fa-solid fa-circle-info text-blue-500"></i> แสดงสถิติการมาซ้อมรายบุคคลในสัปดาห์ปัจจุบัน (จันทร์ - ศุกร์)</p>
@@ -303,6 +308,7 @@
             <div id="profiles-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </section>
 
+        <!-- Report Section -->
         <section id="tab-report" class="tab-content hidden space-y-4 no-print">
             <div class="bg-white p-5 rounded-xl shadow-sm flex justify-between items-center border">
                 <div class="flex items-center space-x-2">
@@ -321,6 +327,7 @@
         </section>
     </main>
 
+    <!-- Modals -->
     <div id="edit-attendance-modal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden no-print">
         <div class="bg-white p-6 rounded-2xl max-w-md w-full shadow-2xl">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
@@ -425,7 +432,7 @@
         let attendanceDb = {};
         let exclusionDb = {}; 
         let editingAttendancePlayers = {};
-        let profileCharts = {}; // เก็บคอนเท็กซ์กราฟหน้าข้อมูลส่วนตัว
+        let profileCharts = {}; 
         let cameraStream = null;
         let myChart = null;
         let weeklyPieChart = null;
@@ -574,7 +581,6 @@
 
         function getSelectedDate() { return document.getElementById('currentAttendanceDate').value; }
 
-        // ดึงลิสต์ของวัน จันทร์-ศุกร์ ของสัปดาห์ที่กำลังเลือกอยู่
         function getWorkingDaysOfSelectedWeek() {
             const current = new Date(getSelectedDate());
             const dayOfWeek = current.getDay(); 
@@ -584,7 +590,7 @@
             monday.setDate(current.getDate() + distanceToMonday);
 
             let workingDays = [];
-            for (let i = 0; i < 5; i++) { // 0=จันทร์, 1=อังคาร, 2=พุธ, 3=พฤหัสฯ, 4=ศุกร์
+            for (let i = 0; i < 5; i++) { 
                 const d = new Date(monday);
                 d.setDate(monday.getDate() + i);
                 workingDays.push(d.toISOString().split('T')[0]);
@@ -592,10 +598,9 @@
             return workingDays;
         }
 
-        // ประมวลผลสถิติการเช็คชื่อเข้าซ้อมรายบุคคลในสัปดาห์ (จ-ศ)
         function getPlayerWeeklyStats(pid, workingDays) {
             let m=0, k=0, l=0, h=0;
-            let dailyStatuses = []; // เก็บลำดับสถานะ จ-ศ
+            let dailyStatuses = []; 
 
             workingDays.forEach(dateStr => {
                 const dayRecords = attendanceDb[dateStr] || {};
@@ -784,7 +789,6 @@
             pushDataToCloud();
         }
 
-        // เรนเดอร์การ์ดโปรไฟล์พร้อมพื้นที่ฝังกราฟ Pie Chart รายบุคคลประจำสัปดาห์
         function renderProfilesContainer() {
             const container = document.getElementById('profiles-grid-container'); if(!container) return; container.innerHTML = '';
             
@@ -847,7 +851,6 @@
             });
         }
 
-        // วาดกราฟลงบนแต่ละการ์ดข้อมูลนักกีฬา
         function renderProfilesCharts() {
             const workingDays = getWorkingDaysOfSelectedWeek();
             players.forEach(p => {
@@ -965,7 +968,6 @@
             players.forEach(p => { select.innerHTML += `<option value="${p.id}">No.${p.no || '-'} ${p.name} (${p.nickname})</option>`; });
         }
 
-        // สร้างใบรายงานผลรายบุคคล A4 (ข้อมูลครบถ้วน + กราฟแท่งรายวัน จ-ศ + กราฟวงกลมสรุป)
         function generateIndividualReport() {
             const area = document.getElementById('print-report-area');
             const id = document.getElementById('report-player-select').value;
@@ -978,7 +980,6 @@
             const workingDays = getWorkingDaysOfSelectedWeek();
             const stats = getPlayerWeeklyStats(p.id, workingDays);
 
-            // แปลงรหัสสถานะเป็นตัวเลขความสูงกราฟแท่ง (มา=1, ขาด=1, ลา=1, หยุด=1, ไม่มีข้อมูล=0)
             const barData = stats.dailyStatuses.map(st => st !== 'ยังไม่ได้เช็ค' ? 1 : 0);
             const barColors = stats.dailyStatuses.map(st => {
                 if(st === '✓') return '#10B981';
@@ -988,7 +989,6 @@
                 return '#E5E7EB';
             });
 
-            // ตกแต่งหน้าตาโครงสร้างของใบรายงานเอกสาร A4
             area.innerHTML = `
                 <div class="space-y-6 text-black">
                     <div class="flex justify-between items-center border-b-4 border-gray-800 pb-4">
@@ -1036,15 +1036,24 @@
                         <div class="text-gray-400">วันหยุดสโมสร: ${stats.h} วัน</div>
                     </div>
 
-                    <div class="pt-12 flex justify-between text-xs text-center font-medium text-gray-600">
+                    <!-- ส่วนเพิ่มเติมกล่องคอมเม้นท์ใต้แถบสีดำ -->
+                    <div class="border border-gray-300 rounded-xl p-4 bg-gray-50 space-y-2">
+                        <div class="flex justify-between items-center border-b pb-1">
+                            <h4 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-comment-medical text-red-600"></i> ความคิดเห็น/ข้อเสนอแนะจากผู้ฝึกสอน (ให้นักกีฬานำไปปรับปรุงแก้ไข)</h4>
+                            <button onclick="document.getElementById('coach-comment-input').focus()" class="no-print bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-semibold shadow-xs transition flex items-center gap-1">
+                                <i class="fa-solid fa-pen"></i> คลิกเพื่อพิมพ์คอมเม้นท์
+                            </button>
+                        </div>
+                        <textarea id="coach-comment-input" rows="3" placeholder="ระบุรายละเอียด ฟอร์มการเล่น จุดที่ต้องปรับปรุงแก้ไข เช่น ระบบทีมเวิร์ค, การป้องกัน หรือความฟิตร่างกาย..." class="w-full p-2 bg-transparent border border-dashed border-gray-300 rounded-lg text-sm focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-hidden resize-none font-medium text-gray-800"></textarea>
+                    </div>
+
+                    <div class="pt-6 flex justify-between text-xs text-center font-medium text-gray-600">
                         <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ผู้ฝึกสอน / สตาฟโค้ช</div>
                         <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ฝ่ายทะเบียนนักกีฬา AC</div>
                     </div>
                 </div>`;
 
-            // ดีลอยสร้างสคริปต์กราฟรายงานทีละชิ้น
             setTimeout(() => {
-                // 1. กราฟแท่งแสดงสถานะรายวัน (จ-ศ)
                 const ctxBar = document.getElementById('reportBarChartCanvas');
                 if(ctxBar) {
                     if (reportBarChart) reportBarChart.destroy();
@@ -1084,7 +1093,6 @@
                     });
                 }
 
-                // 2. กราฟวงกลมสรุปสะสมรายบุคคล
                 const ctxPie = document.getElementById('reportPieChartCanvas');
                 if(ctxPie) {
                     if (reportPieChart) reportPieChart.destroy();
@@ -1119,9 +1127,6 @@
             }, 50);
         }
 
-        // ========================================================
-        // สถิติและระบบควบคุมภาพรวมแดชบอร์ดหลัก
-        // ========================================================
         function initChart() {
             const ctx = document.getElementById('attendanceChart'); if(!ctx) return;
             myChart = new Chart(ctx, {
@@ -1259,7 +1264,7 @@
             const val = document.getElementById('qr-input-mock').value.trim();
             const p = players.find(x => (x.nickname.toLowerCase() === val.toLowerCase() || x.no === val) && !exclusionDb[x.id]);
             if(p) {
-                const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
+                const date = getSelectedDate(); if(!attendanceDb[date]) document.getElementById('qr-input-mock').value = "";
                 attendanceDb[date][p.id] = { status: '✓', note: 'สแกนเช็คอินออนไลน์หน้าสนาม' };
                 document.getElementById('qr-input-mock').value = "";
                 pushDataToCloud();
