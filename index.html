@@ -17,11 +17,10 @@
         @media print {
             body * { visibility: hidden; }
             #print-report-area, #print-report-area * { visibility: visible; }
-            #print-report-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; background: white; color: black; padding: 20mm; box-sizing: border-box; }
+            #print-report-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; background: white; color: black; padding: 15mm; box-sizing: border-box; }
             .no-print { display: none !important; }
         }
         .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; font-weight: bold; }
-        
         .profile-image-container { position: relative; }
         .status-overlay {
             position: absolute;
@@ -130,7 +129,7 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-2">
-                    <h3 class="text-md font-bold text-gray-800 mb-4"><i class="fa-solid fa-chart-column theme-text-red"></i> สถิติสถานะการเข้าซ้อมประจำวันนี้</h3>
+                    <h3 class="text-md font-bold text-gray-800 mb-4"><i class="fa-solid fa-chart-column theme-text-red"></i> สถิติแยกตามรุ่นอายุวันนี้</h3>
                     <div class="relative h-96"><canvas id="attendanceChart"></canvas></div>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-sm flex flex-col justify-between">
@@ -298,16 +297,26 @@
         </section>
 
         <section id="tab-profiles" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm mb-2">
+                <p class="text-sm text-gray-600 font-semibold"><i class="fa-solid fa-circle-info text-blue-500"></i> แสดงสถิติการมาซ้อมรายบุคคลในสัปดาห์ปัจจุบัน (จันทร์ - ศุกร์)</p>
+            </div>
             <div id="profiles-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </section>
 
         <section id="tab-report" class="tab-content hidden space-y-4 no-print">
             <div class="bg-white p-5 rounded-xl shadow-sm flex justify-between items-center border">
-                <select id="report-player-select" onchange="generateIndividualReport()" class="p-2 border rounded-lg text-sm bg-white min-w-[200px]"></select>
-                <button onclick="window.print()" class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm">พิมพ์รายงาน A4</button>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-semibold text-gray-700">เลือกนักกีฬา:</span>
+                    <select id="report-player-select" onchange="generateIndividualReport()" class="p-2 border rounded-lg text-sm bg-white min-w-[220px]"></select>
+                </div>
+                <button onclick="window.print()" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold text-sm transition shadow">
+                    <i class="fa-solid fa-print"></i> พิมพ์รายงาน A4
+                </button>
             </div>
             <div id="individual-report-area" class="bg-gray-200 p-4 rounded-2xl flex justify-center overflow-x-auto">
-                <div id="print-report-area" class="bg-white text-black p-12 shadow-2xl" style="width: 210mm; min-height: 297mm;"></div>
+                <div id="print-report-area" class="bg-white text-black p-12 shadow-2xl" style="width: 210mm; min-height: 297mm;">
+                    <p class="text-center text-gray-400 mt-20">กรุณาเลือกรายชื่อนักกีฬาเพื่อประมวลผลรายงาน</p>
+                </div>
             </div>
         </section>
     </main>
@@ -416,9 +425,12 @@
         let attendanceDb = {};
         let exclusionDb = {}; 
         let editingAttendancePlayers = {};
+        let profileCharts = {}; // เก็บคอนเท็กซ์กราฟหน้าข้อมูลส่วนตัว
         let cameraStream = null;
         let myChart = null;
         let weeklyPieChart = null;
+        let reportPieChart = null;
+        let reportBarChart = null;
 
         document.addEventListener("DOMContentLoaded", function() {
             const today = new Date().toISOString().split('T')[0];
@@ -557,9 +569,47 @@
             });
             document.getElementById(`btn-${tabName}`).classList.add('theme-bg-red', 'text-white');
             stopCameraStream();
+            if(tabName === 'profiles') { renderProfilesCharts(); }
         }
 
         function getSelectedDate() { return document.getElementById('currentAttendanceDate').value; }
+
+        // ดึงลิสต์ของวัน จันทร์-ศุกร์ ของสัปดาห์ที่กำลังเลือกอยู่
+        function getWorkingDaysOfSelectedWeek() {
+            const current = new Date(getSelectedDate());
+            const dayOfWeek = current.getDay(); 
+            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; 
+            
+            const monday = new Date(current);
+            monday.setDate(current.getDate() + distanceToMonday);
+
+            let workingDays = [];
+            for (let i = 0; i < 5; i++) { // 0=จันทร์, 1=อังคาร, 2=พุธ, 3=พฤหัสฯ, 4=ศุกร์
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                workingDays.push(d.toISOString().split('T')[0]);
+            }
+            return workingDays;
+        }
+
+        // ประมวลผลสถิติการเช็คชื่อเข้าซ้อมรายบุคคลในสัปดาห์ (จ-ศ)
+        function getPlayerWeeklyStats(pid, workingDays) {
+            let m=0, k=0, l=0, h=0;
+            let dailyStatuses = []; // เก็บลำดับสถานะ จ-ศ
+
+            workingDays.forEach(dateStr => {
+                const dayRecords = attendanceDb[dateStr] || {};
+                const status = dayRecords[pid]?.status || 'ยังไม่ได้เช็ค';
+                dailyStatuses.push(status);
+
+                if(status === '✓') m++;
+                else if(status === '✕') k++;
+                else if(status === 'ลา') l++;
+                else if(status === 'วันหยุด') h++;
+            });
+
+            return { m, k, l, h, dailyStatuses };
+        }
 
         function loadAttendanceSheet() {
             const tbody = document.getElementById('attendance-table-body');
@@ -734,6 +784,7 @@
             pushDataToCloud();
         }
 
+        // เรนเดอร์การ์ดโปรไฟล์พร้อมพื้นที่ฝังกราฟ Pie Chart รายบุคคลประจำสัปดาห์
         function renderProfilesContainer() {
             const container = document.getElementById('profiles-grid-container'); if(!container) return; container.innerHTML = '';
             
@@ -741,6 +792,8 @@
                 container.innerHTML = `<div class="col-span-full p-12 text-center text-gray-400">ยังไม่มีข้อมูลนักกีฬาในระบบคลาวด์</div>`;
                 return;
             }
+
+            const workingDays = getWorkingDaysOfSelectedWeek();
 
             players.forEach(p => {
                 let overlayHTML = "";
@@ -750,32 +803,83 @@
                     overlayHTML = `<div class="status-overlay text-red-500">ลาออก</div>`;
                 }
 
+                const stats = getPlayerWeeklyStats(p.id, workingDays);
+                const totalChecked = stats.m + stats.k + stats.l + stats.h;
+
                 container.innerHTML += `
-                    <div class="bg-white rounded-2xl border shadow-sm p-4 flex flex-col space-y-4">
-                        <div class="flex items-center space-x-4">
-                            <div class="profile-image-container w-20 h-20 rounded-xl bg-gray-100 overflow-hidden shrink-0 border shadow-inner">
-                                ${overlayHTML}
-                                ${p.avatar ? `<img src="${p.avatar}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-user text-2xl"></i></div>`}
+                    <div class="bg-white rounded-2xl border shadow-sm p-4 flex flex-col space-y-4 justify-between">
+                        <div>
+                            <div class="flex items-center space-x-4 mb-3">
+                                <div class="profile-image-container w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0 border shadow-inner">
+                                    ${overlayHTML}
+                                    ${p.avatar ? `<img src="${p.avatar}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-user text-xl"></i></div>`}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-gray-800 text-sm truncate">No.${p.no || '-'} ${p.name}</h4>
+                                    <p class="text-xs text-gray-600 font-medium">ชื่อเล่น: ${p.nickname} | รุ่น: U${p.u}</p>
+                                    <p class="text-[11px] text-gray-400">วันเกิด: ${p.birth || '-'}</p>
+                                </div>
                             </div>
-                            <div class="flex-1 min-w-0">
-                                <h4 class="font-bold text-gray-800 text-base truncate">No.${p.no || '-'} ${p.name}</h4>
-                                <p class="text-sm text-gray-600 font-medium">ชื่อเล่น: ${p.nickname} | รุ่น: U${p.u}</p>
-                                <p class="text-xs text-gray-400">วันเกิด: ${p.birth || '-'}</p>
+
+                            <div class="bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                <p class="text-[11px] font-bold text-center text-gray-500 mb-1">สถิติสัปดาห์นี้ (จ-ศ)</p>
+                                <div class="relative h-28 w-full flex items-center justify-center">
+                                    ${totalChecked === 0 ? 
+                                        `<p class="text-xs text-gray-400 italic">ไม่มีบันทึกข้อมูลสัปดาห์นี้</p>` : 
+                                        `<canvas id="profile-chart-${p.id}"></canvas>`
+                                    }
+                                </div>
                             </div>
                         </div>
                         
                         <div class="grid grid-cols-3 gap-1.5 pt-2 border-t">
-                            <button onclick="openProfileEditModal('${p.id}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs py-2 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
-                                <i class="fa-solid fa-user-pen text-sm"></i> <span>Edit โปรไฟล์</span>
+                            <button onclick="openProfileEditModal('${p.id}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-user-pen text-xs"></i> <span>Edit โปรไฟล์</span>
                             </button>
-                            <button onclick="markPlayerAsExcluded('${p.id}', 'fail')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-2 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
-                                <i class="fa-solid fa-user-xmark text-sm"></i> <span>ไม่ผ่านคัดตัว</span>
+                            <button onclick="markPlayerAsExcluded('${p.id}', 'fail')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-user-xmark text-xs"></i> <span>ไม่ผ่านคัดตัว</span>
                             </button>
-                            <button onclick="markPlayerAsExcluded('${p.id}', 'resign')" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs py-2 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
-                                <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i> <span>ลาออก</span>
+                            <button onclick="markPlayerAsExcluded('${p.id}', 'resign')" class="bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i> <span>ลาออก</span>
                             </button>
                         </div>
                     </div>`;
+            });
+        }
+
+        // วาดกราฟลงบนแต่ละการ์ดข้อมูลนักกีฬา
+        function renderProfilesCharts() {
+            const workingDays = getWorkingDaysOfSelectedWeek();
+            players.forEach(p => {
+                const canvas = document.getElementById(`profile-chart-${p.id}`);
+                if (!canvas) return;
+
+                if (profileCharts[p.id]) { profileCharts[p.id].destroy(); }
+
+                const stats = getPlayerWeeklyStats(p.id, workingDays);
+
+                profileCharts[p.id] = new Chart(canvas, {
+                    type: 'pie',
+                    data: {
+                        labels: ['มา', 'ขาด', 'ลา', 'หยุด'],
+                        datasets: [{
+                            data: [stats.m, stats.k, stats.l, stats.h],
+                            backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#9CA3AF']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                color: '#fff',
+                                font: { weight: 'bold', size: 10 },
+                                formatter: (value) => value > 0 ? value : ''
+                            }
+                        }
+                    }
+                });
             });
         }
 
@@ -857,76 +961,184 @@
         }
 
         function updateReportDropdown() {
-            const select = document.getElementById('report-player-select'); if(!select) return; select.innerHTML = '';
-            players.forEach(p => { select.innerHTML += `<option value="${p.id}">No.${p.no || '-'} ${p.name}</option>`; });
+            const select = document.getElementById('report-player-select'); if(!select) return; select.innerHTML = '<option value="">-- เลือกรายชื่อนักกีฬา --</option>';
+            players.forEach(p => { select.innerHTML += `<option value="${p.id}">No.${p.no || '-'} ${p.name} (${p.nickname})</option>`; });
         }
 
+        // สร้างใบรายงานผลรายบุคคล A4 (ข้อมูลครบถ้วน + กราฟแท่งรายวัน จ-ศ + กราฟวงกลมสรุป)
         function generateIndividualReport() {
             const area = document.getElementById('print-report-area');
             const id = document.getElementById('report-player-select').value;
+            if(!id) {
+                area.innerHTML = `<p class="text-center text-gray-400 mt-20">กรุณาเลือกรายชื่อนักกีฬาเพื่อประมวลผลรายงาน</p>`;
+                return;
+            }
             const p = players.find(x => x.id === id); if(!p || !area) return;
+
+            const workingDays = getWorkingDaysOfSelectedWeek();
+            const stats = getPlayerWeeklyStats(p.id, workingDays);
+
+            // แปลงรหัสสถานะเป็นตัวเลขความสูงกราฟแท่ง (มา=1, ขาด=1, ลา=1, หยุด=1, ไม่มีข้อมูล=0)
+            const barData = stats.dailyStatuses.map(st => st !== 'ยังไม่ได้เช็ค' ? 1 : 0);
+            const barColors = stats.dailyStatuses.map(st => {
+                if(st === '✓') return '#10B981';
+                if(st === '✕') return '#EF4444';
+                if(st === 'ลา') return '#F59E0B';
+                if(st === 'วันหยุด') return '#9CA3AF';
+                return '#E5E7EB';
+            });
+
+            // ตกแต่งหน้าตาโครงสร้างของใบรายงานเอกสาร A4
             area.innerHTML = `
-                <div class="border p-6 text-center">
-                    <h2 class="text-xl font-bold mb-4">รายงานสถิติการเช็คชื่อออนไลน์</h2>
-                    <p class="text-left">ชื่อ-นามสกุล: <strong>${p.name}</strong> (U${p.u})</p>
-                    <p class="text-left">เบอร์เสื้อ: <strong>No.${p.no || '-'}</strong></p>
+                <div class="space-y-6 text-black">
+                    <div class="flex justify-between items-center border-b-4 border-gray-800 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight">ASSUMPTION COLLEGE BASKETBALL</h2>
+                            <p class="text-sm font-semibold text-gray-600">รายงานสถิติการเข้าฝึกซ้อมและการเข้าร่วมกิจกรรมประจำสัปดาห์</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="px-3 py-1 bg-gray-900 text-white font-bold text-xs rounded">OFFICIAL REPORT</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                        <div class="w-32 h-32 rounded-xl bg-gray-200 overflow-hidden shrink-0 border border-gray-300 shadow-sm">
+                            ${p.avatar ? `<img src="${p.avatar}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-user text-4xl"></i></div>`}
+                        </div>
+                        <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 text-sm w-full">
+                            <div><span class="text-gray-500 font-medium">ชื่อ-นามสกุล:</span> <strong class="text-base text-gray-900">${p.name}</strong></div>
+                            <div><span class="text-gray-500 font-medium">ชื่อเล่น:</span> <strong class="text-base text-gray-900">${p.nickname}</strong></div>
+                            <div><span class="text-gray-500 font-medium">หมายเลขเสื้อ:</span> <strong class="text-base text-red-600">No.${p.no || '-'}</strong></div>
+                            <div><span class="text-gray-500 font-medium">รุ่นอายุกลุ่มนักกีฬา:</span> <span class="bg-gray-200 px-2 py-0.5 rounded font-bold text-xs">U${p.u}</span></div>
+                            <div class="md:col-span-2"><span class="text-gray-500 font-medium">วันเดือนปีเกิด:</span> <strong class="text-gray-900">${p.birth || 'ไม่ระบุ'}</strong></div>
+                            <div class="md:col-span-2 text-indigo-600 font-semibold text-xs border-t pt-2 mt-1">
+                                <i class="fa-solid fa-calendar-days"></i> ช่วงการตรวจสอบสัปดาห์ปัจจุบัน: ${workingDays[0]} ถึง ${workingDays[4]}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-6 pt-2">
+                        <div class="md:col-span-3 border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between">
+                            <h4 class="text-xs font-bold text-gray-700 mb-2 border-b pb-1"><i class="fa-solid fa-chart-bar text-indigo-500"></i> บันทึกเช็คชื่อสถานะรายวัน (จันทร์ - ศุกร์)</h4>
+                            <div class="relative h-48 w-full"><canvas id="reportBarChartCanvas"></canvas></div>
+                        </div>
+                        
+                        <div class="md:col-span-2 border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between">
+                            <h4 class="text-xs font-bold text-gray-700 mb-2 border-b pb-1"><i class="fa-solid fa-chart-pie text-emerald-500"></i> สัดส่วนเปอร์เซ็นต์สะสมสัปดาห์</h4>
+                            <div class="relative h-48 w-full"><canvas id="reportPieChartCanvas"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 text-white p-4 rounded-xl flex justify-around text-center text-sm font-bold">
+                        <div class="text-green-400">มาฝึกซ้อม: ${stats.m} วัน</div>
+                        <div class="text-red-400">ขาดซ้อม: ${stats.k} วัน</div>
+                        <div class="text-amber-400">ลากิจ/ลาป่วย: ${stats.l} วัน</div>
+                        <div class="text-gray-400">วันหยุดสโมสร: ${stats.h} วัน</div>
+                    </div>
+
+                    <div class="pt-12 flex justify-between text-xs text-center font-medium text-gray-600">
+                        <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ผู้ฝึกสอน / สตาฟโค้ช</div>
+                        <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ฝ่ายทะเบียนนักกีฬา AC</div>
+                    </div>
                 </div>`;
-        }
 
-        async function startCameraStream() {
-            const v = document.getElementById('webcam-video');
-            try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}});
-                v.srcObject = cameraStream; v.classList.remove('hidden');
-                document.getElementById('camera-placeholder').classList.add('hidden');
-            } catch(e) { alert("เปิดกล้องล้มเหลว"); }
-        }
+            // ดีลอยสร้างสคริปต์กราฟรายงานทีละชิ้น
+            setTimeout(() => {
+                // 1. กราฟแท่งแสดงสถานะรายวัน (จ-ศ)
+                const ctxBar = document.getElementById('reportBarChartCanvas');
+                if(ctxBar) {
+                    if (reportBarChart) reportBarChart.destroy();
+                    reportBarChart = new Chart(ctxBar, {
+                        type: 'bar',
+                        data: {
+                            labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสฯ', 'ศุกร์'],
+                            datasets: [{
+                                data: barData,
+                                backgroundColor: barColors,
+                                borderRadius: 4,
+                                barThickness: 24
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { max: 1.2, display: false },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                datalabels: {
+                                    anchor: 'end',
+                                    align: 'top',
+                                    font: { weight: 'bold', size: 11 },
+                                    formatter: (value, context) => {
+                                        const st = stats.dailyStatuses[context.dataIndex];
+                                        return st === '✓' ? 'มา' : st === '✕' ? 'ขาด' : st === 'ลา' ? 'ลา' : st === 'วันหยุด' ? 'หยุด' : 'ไม่มีซ้อม';
+                                    },
+                                    color: (context) => barColors[context.dataIndex]
+                                }
+                            }
+                        },
+                        plugins: [ChartDataLabels]
+                    });
+                }
 
-        function stopCameraStream() {
-            if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
-            document.getElementById('webcam-video').classList.add('hidden');
-            document.getElementById('camera-placeholder').classList.remove('hidden');
-        }
-
-        function handleQRCheckInWithPhoto() {
-            const val = document.getElementById('qr-input-mock').value.trim();
-            const p = players.find(x => (x.nickname.toLowerCase() === val.toLowerCase() || x.no === val) && !exclusionDb[x.id]);
-            if(p) {
-                const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
-                attendanceDb[date][p.id] = { status: '✓', note: 'สแกนเช็คอินออนไลน์หน้าสนาม' };
-                document.getElementById('qr-input-mock').value = "";
-                pushDataToCloud();
-            } else { alert("ไม่พบข้อมูลนักกีฬาคนนี้ หรือนักกีฬาถูกตัดออกจากยอดระบบ"); }
+                // 2. กราฟวงกลมสรุปสะสมรายบุคคล
+                const ctxPie = document.getElementById('reportPieChartCanvas');
+                if(ctxPie) {
+                    if (reportPieChart) reportPieChart.destroy();
+                    const sum = stats.m + stats.k + stats.l + stats.h;
+                    reportPieChart = new Chart(ctxPie, {
+                        type: 'pie',
+                        data: {
+                            labels: ['มา', 'ขาด', 'ลา', 'หยุด'],
+                            datasets: [{
+                                data: [stats.m, stats.k, stats.l, stats.h],
+                                backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#9CA3AF']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                                datalabels: {
+                                    color: '#fff',
+                                    font: { weight: 'bold', size: 10 },
+                                    formatter: (value) => {
+                                        if (value === 0 || sum === 0) return '';
+                                        return ((value * 100) / sum).toFixed(0) + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [ChartDataLabels]
+                    });
+                }
+            }, 50);
         }
 
         // ========================================================
-        // ข้อ 1: แก้ไขสถิติประจำวันให้เป็น มา ขาด ลา วันหยุด ของวันนั้นๆ
+        // สถิติและระบบควบคุมภาพรวมแดชบอร์ดหลัก
         // ========================================================
         function initChart() {
             const ctx = document.getElementById('attendanceChart'); if(!ctx) return;
             myChart = new Chart(ctx, {
                 type: 'bar', 
                 data: {
-                    labels: ["มา (✓)", "ขาด (✕)", "ลา", "วันหยุด"], 
+                    labels: ["U12","U13","U14","U15","U16","U17","U18","นักกีฬาใหม่"], 
                     datasets:[{
-                        label: 'จำนวนคนวันนี้',
-                        data: [0, 0, 0, 0],
-                        backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#9CA3AF'],
+                        label:'จำนวนนักกีฬาที่เข้าซ้อมวันนี้ (คน)',
+                        data:[0,0,0,0,0,0,0,0],
+                        backgroundColor:'#10B981',
                         borderRadius: 6
                     }]
                 }, 
                 options:{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false } // ปิด Legend ด้านบนเนื่องจากมี Label ใต้แท่งชัดเจนแล้ว
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 1 }
-                        }
-                    }
+                    responsive:true,
+                    maintainAspectRatio:false,
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
                 }
             });
             updateChartData();
@@ -936,23 +1148,20 @@
             if(!myChart) return;
             const date = getSelectedDate(); 
             const dayRecords = attendanceDb[date] || {};
-            let counts = [0, 0, 0, 0]; // Index: 0=มา, 1=ขาด, 2=ลา, 3=วันหยุด
+            let counts = Array(8).fill(0); 
+            const keys = ["12","13","14","15","16","17","18","New"];
             
             players.forEach(p => {
                 if(exclusionDb[p.id]) return; 
-                const s = dayRecords[p.id]?.status;
-                if(s === '✓') counts[0]++; 
-                else if(s === '✕') counts[1]++;
-                else if(s === 'ลา') counts[2]++;
-                else if(s === 'วันหยุด') counts[3]++;
+                if(dayRecords[p.id]?.status === '✓') { 
+                    const idx = keys.indexOf(p.u); 
+                    if(idx !== -1) counts[idx]++; 
+                }
             });
             myChart.data.datasets[0].data = counts; 
             myChart.update();
         }
 
-        // ========================================================
-        // ข้อ 2 & 3: ขยับ % และสถิติให้ออกมาอยู่นอกวง Pie และโชว์เฉพาะยอดตัวเลข
-        // ========================================================
         function initWeeklyPieChart() {
             const ctx = document.getElementById('weeklyPieChart'); if(!ctx) return;
             weeklyPieChart = new Chart(ctx, {
@@ -968,15 +1177,13 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: {
-                        padding: 35 // เพิ่ม Padding เพื่อไม่ให้ข้อความที่อยู่ด้านนอกขอบกราฟโดนตัดหลุดหน้าจอ
-                    },
+                    layout: { padding: 25 },
                     plugins: {
                         legend: { position: 'top' },
                         datalabels: {
-                            anchor: 'end',    // ขยับจุดยึดมาไว้ที่ปลายขอบนอกวง
-                            align: 'end',     // ผลักอักษรให้ออกไปด้านนอกวงกลม
-                            offset: 10,       // ระยะห่างจากเส้นขอบพาย
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 6,
                             borderWidth: 1,
                             borderRadius: 4,
                             backgroundColor: (context) => context.dataset.backgroundColor[context.dataIndex],
@@ -986,10 +1193,9 @@
                                 let sum = 0;
                                 let dataArr = ctx.chart.data.datasets[0].data;
                                 dataArr.forEach(data => { sum += data; });
-                                if (sum === 0) return "0%";
+                                if (sum === 0) return value;
                                 let percentage = (value * 100 / sum).toFixed(1) + "%";
-                                // โชว์เฉพาะ "จำนวนคน (เปอร์เซ็นต์)" นอกวง Pie ชาร์ตตามที่ต้องการเพื่อความสะอาดตา
-                                return `${value}คน (${percentage})`;
+                                return `${ctx.chart.data.labels[ctx.dataIndex]}: ${value} คน (${percentage})`;
                             }
                         }
                     }
@@ -1021,6 +1227,7 @@
             }
 
             targetDates.forEach(d => {
+                if(!attendanceDb[d]) return;
                 Object.keys(attendanceDb[d]).forEach(pid => {
                     if(exclusionDb[pid]) return; 
                     const s = attendanceDb[d][pid].status;
@@ -1031,6 +1238,32 @@
             weeklyPieChart.data.datasets[0].data = [m,k,l,h]; 
             weeklyPieChart.update();
             document.getElementById('weekly-pie-summary').innerText = `มา ${m} | ขาด ${k} | ลา ${l} | วันหยุด ${h}`;
+        }
+
+        async function startCameraStream() {
+            const v = document.getElementById('webcam-video');
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}});
+                v.srcObject = cameraStream; v.classList.remove('hidden');
+                document.getElementById('camera-placeholder').classList.add('hidden');
+            } catch(e) { alert("เปิดกล้องล้มเหลว"); }
+        }
+
+        function stopCameraStream() {
+            if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+            document.getElementById('webcam-video').classList.add('hidden');
+            document.getElementById('camera-placeholder').classList.remove('hidden');
+        }
+
+        function handleQRCheckInWithPhoto() {
+            const val = document.getElementById('qr-input-mock').value.trim();
+            const p = players.find(x => (x.nickname.toLowerCase() === val.toLowerCase() || x.no === val) && !exclusionDb[x.id]);
+            if(p) {
+                const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
+                attendanceDb[date][p.id] = { status: '✓', note: 'สแกนเช็คอินออนไลน์หน้าสนาม' };
+                document.getElementById('qr-input-mock').value = "";
+                pushDataToCloud();
+            } else { alert("ไม่พบข้อมูลนักกีฬาคนนี้ หรือนักกีฬาถูกตัดออกจากยอดระบบ"); }
         }
 
         function exportToExcel() {
