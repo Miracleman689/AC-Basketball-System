@@ -22,7 +22,6 @@
         }
         .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; font-weight: bold; }
         
-        /* สไตล์เพิ่มเติมสำหรับ Overlay แสดงสถานะทับรูปภาพ */
         .profile-image-container { position: relative; }
         .status-overlay {
             position: absolute;
@@ -95,15 +94,24 @@
         </div>
 
         <section id="tab-dashboard" class="tab-content block space-y-6">
-            <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-xl shadow-sm gap-4">
                 <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                     <i class="fa-solid fa-gauge-high theme-text-red"></i> แผงควบคุมและสรุปผลภาพรวมออนไลน์
                 </h2>
+                <div class="flex items-center space-x-2 w-full md:w-auto">
+                    <span class="text-sm text-gray-600 font-medium whitespace-nowrap"><i class="fa-solid fa-calendar-week text-indigo-600"></i> ช่วงเวลาสถิติสะสม:</span>
+                    <select id="dashboard-week-filter" onchange="updateWeeklyPieChart()" class="bg-gray-50 border border-gray-300 text-gray-700 p-2 rounded-lg text-sm font-semibold cursor-pointer w-full md:w-56 focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">สะสมทั้งหมดทุกเวลา</option>
+                        <option value="CURRENT_WEEK" selected>สัปดาห์ปัจจุบัน (7 วันล่าสุด)</option>
+                        <option value="LAST_2_WEEKS">ย้อนหลัง 2 สัปดาห์ (14 วัน)</option>
+                        <option value="LAST_4_WEEKS">ย้อนหลัง 4 สัปดาห์ (28 วัน)</option>
+                    </select>
+                </div>
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-600">
-                    <p class="text-sm text-gray-500 font-medium">นักกีฬาทั้งหมด (สัปดาห์นี้)</p>
+                    <p class="text-sm text-gray-500 font-medium">นักกีฬาทั้งหมด (Active)</p>
                     <p class="text-3xl font-bold text-gray-800" id="stat-total-players">0</p>
                 </div>
                 <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500">
@@ -128,11 +136,11 @@
                 <div class="bg-white p-5 rounded-xl shadow-sm flex flex-col justify-between">
                     <div>
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-md font-bold text-gray-800"><i class="fa-solid fa-chart-pie text-emerald-500"></i> สัดส่วนบันทึกสะสมสัปดาห์นี้</h3>
+                            <h3 class="text-md font-bold text-gray-800"><i class="fa-solid fa-chart-pie text-emerald-500"></i> สัดส่วนบันทึกสะสมช่วงเวลาที่เลือก</h3>
                         </div>
-                        <div class="relative h-80 w-full flex items-center justify-center"><canvas id="weeklyPieChart"></canvas></div>
+                        <div class="relative h-80 w-full flex items-center justify-center p-2"><canvas id="weeklyPieChart"></canvas></div>
                     </div>
-                    <div id="weekly-pie-summary" class="text-center text-xs text-gray-500 mt-2 border-t pt-2 font-medium">ซ้อม 0 | ขาด 0 | ลา 0 | วันหยุด 0</div>
+                    <div id="weekly-pie-summary" class="text-center text-xs text-gray-500 mt-2 border-t pt-2 font-medium">มา 0 | ขาด 0 | ลา 0 | วันหยุด 0</div>
                 </div>
             </div>
 
@@ -406,7 +414,7 @@
 
         let players = [];
         let attendanceDb = {};
-        let exclusionDb = {}; // { playerId: "fail" หรือ "resign" }
+        let exclusionDb = {}; 
         let editingAttendancePlayers = {};
         let cameraStream = null;
         let myChart = null;
@@ -553,7 +561,6 @@
 
         function getSelectedDate() { return document.getElementById('currentAttendanceDate').value; }
 
-        // ปรับปรุงการโหลดรายชื่อเช็คชื่อ: ถ้านักกีฬา "ไม่ผ่าน" หรือ "ลาออก" จะไม่ถูกดึงมาเช็คชื่อในสัปดาห์นั้น
         function loadAttendanceSheet() {
             const tbody = document.getElementById('attendance-table-body');
             if(!tbody) return; tbody.innerHTML = '';
@@ -561,7 +568,6 @@
             const date = getSelectedDate();
             const dayRecords = attendanceDb[date] || {};
             
-            // กรองเอานักกีฬาที่สถานะเป็นปกติ (ไม่ได้ถูกคัดออกหรือลาออก) ออกมาเช็คชื่อประจำวัน
             let sortedPlayers = players.filter(p => (filterU === 'ALL' || p.u === filterU) && !exclusionDb[p.id]);
             
             if(sortedPlayers.length === 0) {
@@ -648,18 +654,16 @@
             loadAttendanceSheet();
         }
 
-        // อัปเดตแดชบอร์ด: ยอดรวมนักกีฬาทั้งหมด จะไม่นับคนที่ "ไม่ผ่านคัดตัว" หรือ "ลาออก"
         function updateDashboardStats() {
             const date = getSelectedDate();
             let present = 0; let absent = 0;
             const dayRecords = attendanceDb[date] || {};
             let notesHTML = "";
 
-            // นับเฉพาะนักกีฬาที่มีสถานะ Active เท่านั้น
             let activePlayersCount = players.filter(p => !exclusionDb[p.id]).length;
 
             players.forEach(p => {
-                if (exclusionDb[p.id]) return; // ข้ามคนที่ไม่ผ่านคัดตัว/ลาออก
+                if (exclusionDb[p.id]) return; 
                 const rec = dayRecords[p.id];
                 if(rec) {
                     if(rec.status === '✓') present++;
@@ -730,9 +734,6 @@
             pushDataToCloud();
         }
 
-        // ========================================================
-        // ส่วนจัดการฟังก์ชัน 3 ปุ่ม ในหน้าข้อมูลนักกีฬา (TAB: PROFILES)
-        // ========================================================
         function renderProfilesContainer() {
             const container = document.getElementById('profiles-grid-container'); if(!container) return; container.innerHTML = '';
             
@@ -742,7 +743,6 @@
             }
 
             players.forEach(p => {
-                // เช็คค่า Overlay ข้อความที่จะแสดงทับรูปภาพ
                 let overlayHTML = "";
                 if (exclusionDb[p.id] === 'fail') {
                     overlayHTML = `<div class="status-overlay text-amber-400">ไม่ผ่าน</div>`;
@@ -779,19 +779,17 @@
             });
         }
 
-        // ทำฟังก์ชัน "ไม่ผ่านคัดตัว" และ "ลาออก" (หากกดปุ่มซ้ำ จะเป็นการยกเลิกคืนสถานะปกติ)
         function markPlayerAsExcluded(pid, type) {
             if (exclusionDb[pid] === type) {
-                delete exclusionDb[pid]; // คืนค่าเป็นปกติ
+                delete exclusionDb[pid]; 
                 alert("คืนค่าสถานะนักกีฬาเป็นปกติเรียบร้อยแล้ว");
             } else {
-                exclusionDb[pid] = type; // ลงบันทึกว่าไม่ผ่าน หรือ ลาออก
-                alert(type === 'fail' ? "บันทึกสถานะ 'ไม่ผ่านคัดตัว' สำเร็จ (ระบบตัดชื่อออกจากยอดสัปดาห์แล้ว)" : "บันทึกสถานะ 'ลาออก' สำเร็จ (ระบบตัดชื่อออกจากยอดสัปดาห์แล้ว)");
+                exclusionDb[pid] = type; 
+                alert(type === 'fail' ? "บันทึกสถานะ 'ไม่ผ่านคัดตัว' สำเร็จ" : "บันทึกสถานะ 'ลาออก' สำเร็จ");
             }
-            pushDataToCloud(); // บันทึกและซิงค์คลาวด์อัปเดตยอด Dashboard
+            pushDataToCloud(); 
         }
 
-        // ฟังก์ชันควบคุม Pop-up แก้ไขข้อมูลโปรไฟล์
         function openProfileEditModal(pid) {
             const p = players.find(x => x.id === pid);
             if (!p) return;
@@ -854,7 +852,7 @@
                 }
                 
                 closeProfileEditModal();
-                pushDataToCloud(); // บันทึกการเปลี่ยนแปลงขึ้นคลาวด์กูเกิลชีต
+                pushDataToCloud(); 
             }
         }
 
@@ -901,37 +899,140 @@
             } else { alert("ไม่พบข้อมูลนักกีฬาคนนี้ หรือนักกีฬาถูกตัดออกจากยอดระบบ"); }
         }
 
+        // ========================================================
+        // ข้อ 1: บั๊กกราฟแท่งประจำวัน (Bar Chart) ทำงานเรียบร้อยแล้ว
+        // ========================================================
         function initChart() {
             const ctx = document.getElementById('attendanceChart'); if(!ctx) return;
-            myChart = new Chart(ctx, {type: 'bar', data: {labels: ["U12","U13","U14","U15","U16","U17","U18"], datasets:[{label:'มา',data:[0,0,0,0,0,0,0],backgroundColor:'#10B981'}]}, options:{responsive:true,maintainAspectRatio:false}});
+            myChart = new Chart(ctx, {
+                type: 'bar', 
+                data: {
+                    labels: ["U12","U13","U14","U15","U16","U17","U18","นักกีฬาใหม่"], 
+                    datasets:[{
+                        label:'จำนวนนักกีฬาที่เข้าซ้อมวันนี้ (คน)',
+                        data:[0,0,0,0,0,0,0,0],
+                        backgroundColor:'#10B981',
+                        borderRadius: 6
+                    }]
+                }, 
+                options:{
+                    responsive:true,
+                    maintainAspectRatio:false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+            updateChartData();
         }
+
         function updateChartData() {
             if(!myChart) return;
-            const date = getSelectedDate(); const dayRecords = attendanceDb[date] || {};
-            let counts = Array(7).fill(0); const keys = ["12","13","14","15","16","17","18"];
+            const date = getSelectedDate(); 
+            const dayRecords = attendanceDb[date] || {};
+            let counts = Array(8).fill(0); 
+            const keys = ["12","13","14","15","16","17","18","New"];
+            
             players.forEach(p => {
-                if(exclusionDb[p.id]) return;
-                if(dayRecords[p.id]?.status === '✓') { const idx = keys.indexOf(p.u); if(idx!==-1) counts[idx]++; }
+                if(exclusionDb[p.id]) return; // ข้ามกลุ่มไม่ผ่าน/ลาออก
+                // เช็คว่าถ้าสถานะในวันนั้นถูกบันทึกว่า มา (✓) ให้มาเพิ่มเลขสถิติในกราฟแท่ง
+                if(dayRecords[p.id]?.status === '✓') { 
+                    const idx = keys.indexOf(p.u); 
+                    if(idx !== -1) counts[idx]++; 
+                }
             });
-            myChart.data.datasets[0].data = counts; myChart.update();
+            myChart.data.datasets[0].data = counts; 
+            myChart.update();
         }
+
+        // ========================================================
+        // ข้อ 2 & 3: ย้ายตัวเลขออกมานอกวง Pie และระบบคำนวณสัปดาห์ย้อนหลัง
+        // ========================================================
         function initWeeklyPieChart() {
             const ctx = document.getElementById('weeklyPieChart'); if(!ctx) return;
-            weeklyPieChart = new Chart(ctx, {type:'pie', plugins:[ChartDataLabels], data:{labels:['มา','ขาด','ลา','หยุด'],datasets:[{data:[0,0,0,0],backgroundColor:['#10B981','#EF4444','#F59E0B','#9CA3AF']}]},options:{responsive:true,maintainAspectRatio:false}});
+            weeklyPieChart = new Chart(ctx, {
+                type: 'pie', 
+                plugins: [ChartDataLabels], // เปิดใช้งานปลั๊กอิน Datalabels ออกนอกวงกลม
+                data: {
+                    labels: ['มา','ขาด','ลา','หยุด'],
+                    datasets: [{
+                        data: [0,0,0,0],
+                        backgroundColor: ['#10B981','#EF4444','#F59E0B','#9CA3AF']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: 25 // เพิ่มพื้นที่เผื่อให้ตัวเลขแสดงด้านนอกไม่ขาดหาย
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            // ปรับการตั้งค่าเพื่อให้ตัวเลขกระโดดออกมาด้านนอกวงกลม
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 6,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            backgroundColor: (context) => context.dataset.backgroundColor[context.dataIndex],
+                            color: '#fff',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                let sum = 0;
+                                let dataArr = ctx.chart.data.datasets[0].data;
+                                dataArr.forEach(data => { sum += data; });
+                                if (sum === 0) return value;
+                                let percentage = (value * 100 / sum).toFixed(1) + "%";
+                                return `${ctx.chart.data.labels[ctx.dataIndex]}: ${value} คน (${percentage})`;
+                            }
+                        }
+                    }
+                }
+            });
+            updateWeeklyPieChart();
         }
+
         function updateWeeklyPieChart() {
             if(!weeklyPieChart) return;
             let m=0, k=0, l=0, h=0;
-            Object.keys(attendanceDb).forEach(d => {
+            const filterType = document.getElementById('dashboard-week-filter').value;
+            
+            // ประมวลผลและกรองวันที่ตามช่วงเวลาที่ผู้ใช้งานเลือกในเมนู
+            let targetDates = Object.keys(attendanceDb);
+            const todayStr = getSelectedDate();
+            const todayObj = new Date(todayStr);
+
+            if (filterType !== 'ALL') {
+                let daysLimit = 7; // ค่า Default สำหรับ CURRENT_WEEK
+                if (filterType === 'LAST_2_WEEKS') daysLimit = 14;
+                if (filterType === 'LAST_4_WEEKS') daysLimit = 28;
+
+                targetDates = targetDates.filter(dStr => {
+                    const dateObj = new Date(dStr);
+                    const timeDiff = todayObj - dateObj;
+                    const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+                    return daysDiff >= 0 && daysDiff < daysLimit;
+                });
+            }
+
+            // คำนวณผลรวมสะสมจากวันที่ที่ผ่านตัวกรองแล้ว
+            targetDates.forEach(d => {
                 Object.keys(attendanceDb[d]).forEach(pid => {
-                    if(exclusionDb[pid]) return;
+                    if(exclusionDb[pid]) return; // ข้ามกลุ่มคัดออก
                     const s = attendanceDb[d][pid].status;
                     if(s==='✓') m++; else if(s==='✕') k++; else if(s==='ลา') l++; else if(s==='วันหยุด') h++;
                 });
             });
-            weeklyPieChart.data.datasets[0].data = [m,k,l,h]; weeklyPieChart.update();
-            document.getElementById('weekly-pie-summary').innerText = `ซ้อม ${m} | ขาด ${k} | ลา ${l} | วันหยุด ${h}`;
+
+            weeklyPieChart.data.datasets[0].data = [m,k,l,h]; 
+            weeklyPieChart.update();
+            document.getElementById('weekly-pie-summary').innerText = `มา ${m} | ขาด ${k} | ลา ${l} | วันหยุด ${h}`;
         }
+
         function exportToExcel() {
             let csv = "\uFEFFเบอร์,ชื่อ,สถานะ\n";
             players.forEach(p => { 
