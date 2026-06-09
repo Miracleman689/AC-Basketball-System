@@ -59,8 +59,8 @@
                     <span class="text-sm mr-2 text-gray-300">เลือกวันที่ซ้อม/แก้ไขย้อนหลัง:</span>
                     <input type="date" id="currentAttendanceDate" class="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700 cursor-pointer" onchange="changeAttendanceDate(this.value)">
                 </div>
-                <button onclick="syncDataFromCloud()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition flex items-center space-x-1 cursor-pointer">
-                    <i class="fa-solid fa-sync"></i> <span>ดึงข้อมูลล่าสุด</span>
+                <button onclick="syncDataFromCloud(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition flex items-center space-x-1 cursor-pointer">
+                    <i class="fa-solid fa-sync"></i> <span>รีเฟรชดึงข้อมูลล่าสุด</span>
                 </button>
             </div>
         </div>
@@ -93,7 +93,6 @@
             <input type="date" id="currentAttendanceDateMobile" class="bg-gray-100 px-3 py-1 rounded border border-gray-300 cursor-pointer" onchange="changeAttendanceDate(this.value)">
         </div>
 
-        <!-- Dashboard Section -->
         <section id="tab-dashboard" class="tab-content block space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-xl shadow-sm gap-4">
                 <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -151,7 +150,6 @@
             </div>
         </section>
 
-        <!-- Attendance Section -->
         <section id="tab-attendance" class="tab-content hidden space-y-4">
             <div class="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
                 <div class="flex items-center space-x-2 w-full md:w-auto">
@@ -196,7 +194,6 @@
             </div>
         </section>
 
-        <!-- Players Section -->
         <section id="tab-players" class="tab-content hidden space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="bg-white p-5 rounded-xl shadow-sm h-fit space-y-6">
@@ -280,7 +277,6 @@
             </div>
         </section>
 
-        <!-- QR Scan Section -->
         <section id="tab-qr-scan" class="tab-content hidden max-w-md mx-auto">
             <div class="bg-white p-6 rounded-2xl shadow-md text-center space-y-5 border">
                 <div class="flex justify-between items-center">
@@ -301,7 +297,6 @@
             </div>
         </section>
 
-        <!-- Profiles Section -->
         <section id="tab-profiles" class="tab-content hidden space-y-4">
             <div class="bg-white p-4 rounded-xl shadow-sm mb-2">
                 <p class="text-sm text-gray-600 font-semibold"><i class="fa-solid fa-circle-info text-blue-500"></i> แสดงสถิติการมาซ้อมรายบุคคลในสัปดาห์ปัจจุบัน (จันทร์ - ศุกร์)</p>
@@ -309,7 +304,6 @@
             <div id="profiles-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </section>
 
-        <!-- Report Section -->
         <section id="tab-report" class="tab-content hidden space-y-4 no-print">
             <div class="bg-white p-5 rounded-xl shadow-sm flex justify-between items-center border">
                 <div class="flex items-center space-x-2">
@@ -328,7 +322,6 @@
         </section>
     </main>
 
-    <!-- Modals -->
     <div id="edit-attendance-modal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden no-print">
         <div class="bg-white p-6 rounded-2xl max-w-md w-full shadow-2xl">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
@@ -444,7 +437,7 @@
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('currentAttendanceDate').value = today;
             document.getElementById('currentAttendanceDateMobile').value = today;
-            syncDataFromCloud();
+            syncDataFromCloud(); // เรียกดึงข้อมูลความเร็วสูงผ่านระบบจัดการ Cache และคลาวด์เบื้องหลัง
         });
 
         function showLoading(text) {
@@ -456,8 +449,21 @@
             document.getElementById('loading-screen').classList.add('hidden');
         }
 
-        function syncDataFromCloud() {
-            showLoading("กำลังเชื่อมต่อฐานข้อมูล Google Sheets ออนไลน์...");
+        function syncDataFromCloud(forceRefresh = false) {
+            // 1. ดึงข้อมูลจากความจำเครื่อง (Cache) มาแสดงผลทันที ไม่ต้องรอหน้าจอหมุนโหลดค้าง
+            const cachedData = localStorage.getItem('ac_basketball_cache');
+            if (cachedData && !forceRefresh) {
+                const data = JSON.parse(cachedData);
+                players = data.players || [];
+                attendanceDb = data.attendance || {};
+                exclusionDb = data.exclusion || {};
+                refreshAllViews();
+                if(!myChart) { initChart(); initWeeklyPieChart(); } else { updateChartData(); updateWeeklyPieChart(); }
+            } else {
+                showLoading("กำลังเชื่อมต่อฐานข้อมูล Google Sheets ออนไลน์...");
+            }
+
+            // 2. แอบดึงข้อมูลล่าสุดจาก Google Sheets จริงอยู่เบื้องหลัง (Background Fetch)
             fetch(`${CLOUD_API_URL}?action=getData`)
                 .then(res => res.json())
                 .then(data => {
@@ -465,12 +471,16 @@
                     attendanceDb = data.attendance || {};
                     exclusionDb = data.exclusion || {};
                     
+                    // เซฟเก็บข้อมูลชุดล่าสุดไว้ในเครื่องเพื่อความเร็วในรอบหน้า
+                    localStorage.setItem('ac_basketball_cache', JSON.stringify(data));
+                    
                     refreshAllViews();
                     if(!myChart) { initChart(); initWeeklyPieChart(); } else { updateChartData(); updateWeeklyPieChart(); }
                     hideLoading();
                 })
                 .catch(err => {
-                    alert("ไม่สามารถโหลดข้อมูลออนไลน์ได้ กรุณาตรวจสอบสิทธิ์ Deployment ในกูเกิลชีต");
+                    console.error("Cloud Sync Error:", err);
+                    if(!cachedData) alert("ไม่สามารถโหลดข้อมูลออนไลน์ได้ กรุณาตรวจสอบสิทธิ์ของ Google Sheets");
                     hideLoading();
                 });
         }
@@ -490,9 +500,12 @@
             })
             .then(res => res.json())
             .then(res => {
+                // บันทึกสำเร็จ อัปเดต Cache ทันทีโดยไม่ต้องรอดึงข้อมูลย้อนกลับซ้ำซ้อนให้หมุนนานอีกรอบ
+                const currentData = { players, attendance: attendanceDb, exclusion: exclusionDb };
+                localStorage.setItem('ac_basketball_cache', JSON.stringify(currentData));
+                
                 hideLoading();
                 if(!silent) alert("ระบบบันทึกและอัปเดตข้อมูลออนไลน์สำเร็จแล้ว!");
-                syncDataFromCloud();
             })
             .catch(err => {
                 alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลออนไลน์");
@@ -543,6 +556,8 @@
                     pushDataToCloud(true);
                     document.getElementById('csv-file-input').value = ""; 
                     alert(`นำเข้าสำเร็จ! เพิ่มนักกีฬาใหม่ทั้งหมด ${addedCount} คน เข้าสู่ฐานข้อมูลคลาวด์เรียบร้อยครับ`);
+                    // อัปเดตรีเฟรชหน้าจอหลังจากนำเข้าข้อมูลเสร็จ
+                    refreshAllViews();
                 } else {
                     hideLoading();
                     alert("ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV กรุณาตรวจสอบความถูกต้องอีกครั้ง");
@@ -689,6 +704,8 @@
             attendanceDb[date][pid] = { status: status, note: document.getElementById('edit-att-note').value };
             closeAttendanceEditModal();
             pushDataToCloud();
+            // รีเฟรชข้อมูลที่จำเป็นหลังอัปเดตค่าออนไลน์
+            refreshAllViews();
         }
 
         function submitAttendanceSheet() {
@@ -702,6 +719,7 @@
                 }
             });
             pushDataToCloud();
+            refreshAllViews();
         }
 
         function markAllPresent() {
@@ -753,6 +771,7 @@
             document.getElementById('add-player-form').reset();
             document.getElementById('player-avatar-preview').classList.add('hidden');
             document.getElementById('avatar-placeholder-icon').classList.remove('hidden');
+            refreshAllViews();
         }
 
         function previewPlayerImage(e) {
@@ -788,6 +807,7 @@
             players = players.filter(x => x.id !== id);
             delete exclusionDb[id];
             pushDataToCloud();
+            refreshAllViews();
         }
 
         function renderProfilesContainer() {
@@ -808,7 +828,7 @@
                     overlayHTML = `<div class="status-overlay text-red-500">ลาออก</div>`;
                 }
 
-                // ตัดเวลาออก แสดงเฉพาะ YYYY-MM-DD
+                // [แก้ไขจุดที่ 2] ตัดเวลาของ Date ISO Object ออกอย่างสมบูรณ์แบบไม่ให้เหลือเศษเวลา
                 const cleanBirth = p.birth ? String(p.birth).split('T')[0] : 'ไม่ระบุ';
                 const stats = getPlayerWeeklyStats(p.id, workingDays);
                 const totalChecked = stats.m + stats.k + stats.l + stats.h;
@@ -898,6 +918,7 @@
                 alert(type === 'fail' ? "บันทึกสถานะ 'ไม่ผ่านคัดตัว' สำเร็จ" : "บันทึกสถานะ 'ลาออก' สำเร็จ");
             }
             pushDataToCloud(); 
+            refreshAllViews();
         }
 
         function openProfileEditModal(pid) {
@@ -910,7 +931,8 @@
             document.getElementById('edit-profile-number').value = p.no || '';
             document.getElementById('edit-profile-u').value = p.u;
             
-            const cleanBirth = p.birth ? String (p.birth).split('T')[0] : '';
+            // [แก้ไขจุดที่ 3] จัดโครงสร้างฟอร์แมตวันเกิดให้สะอาดในป๊อปอัปแก้ไข เพื่อให้ช่อง Date ทำงานได้ถูกต้อง
+            const cleanBirth = p.birth ? String(p.birth).split('T')[0] : '';
             document.getElementById('edit-profile-birth').value = cleanBirth;
             
             const previewImg = document.getElementById('edit-profile-preview');
@@ -965,6 +987,7 @@
                 
                 closeProfileEditModal();
                 pushDataToCloud(); 
+                refreshAllViews();
             }
         }
 
@@ -995,8 +1018,9 @@
             });
 
             // ล้างฟอร์แมตวันเกิดดึงแค่ YYYY-MM-DD ป้องกันปัญหาเวลาต่อท้าย
-            const reportBirthClean = p.birth ? p.birth.split('T')[0] : 'ไม่ระบุ';
+            const reportBirthClean = p.birth ? String(p.birth).split('T')[0] : 'ไม่ระบุ';
 
+            // [แก้ไขจุดที่ 1] บล็อกส่วนเรนเดอร์ เปลี่ยนจาก p.birth ไปเรียกใช้ reportBirthClean เพื่อตัดเวลาทิ้งถาวร
             area.innerHTML = `
                 <div class="space-y-6 text-black">
                     <div class="flex justify-between items-center border-b-4 border-gray-800 pb-4">
@@ -1044,7 +1068,6 @@
                         <div class="text-gray-400">วันหยุดสโมสร: ${stats.h} วัน</div>
                     </div>
 
-                    <!-- คอมเม้นท์บล็อก ล็อกไม่ให้เรนเดอร์เวอร์ชันเก่าทับ -->
                     <div class="border border-gray-300 rounded-xl p-4 bg-gray-50 space-y-2">
                         <div class="flex justify-between items-center border-b pb-1">
                             <h4 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-comment-medical text-red-600"></i> ความคิดเห็น/ข้อเสนอแนะจากผู้ฝึกสอน (ให้นักกีฬานำไปปรับปรุงแก้ไข)</h4>
@@ -1272,10 +1295,11 @@
             const val = document.getElementById('qr-input-mock').value.trim();
             const p = players.find(x => (x.nickname.toLowerCase() === val.toLowerCase() || x.no === val) && !exclusionDb[x.id]);
             if(p) {
-                const date = getSelectedDate(); if(!attendanceDb[date]) document.getElementById('qr-input-mock').value = "";
+                const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
                 attendanceDb[date][p.id] = { status: '✓', note: 'สแกนเช็คอินออนไลน์หน้าสนาม' };
                 document.getElementById('qr-input-mock').value = "";
                 pushDataToCloud();
+                refreshAllViews();
             } else { alert("ไม่พบข้อมูลนักกีฬาคนนี้ หรือนักกีฬาถูกตัดออกจากยอดระบบ"); }
         }
 
