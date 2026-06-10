@@ -514,57 +514,61 @@
         }
 
         function handleCSVImport(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-            showLoading("กำลังอ่านไฟล์ CSV และเตรียมอัปโหลดข้อมูล...");
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const text = evt.target.result;
-                const lines = text.split(/\r?\n/);
-                let addedCount = 0;
+    showLoading("กำลังอ่านไฟล์ CSV และเตรียมอัปโหลดข้อมูล...");
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const text = evt.target.result;
+        const lines = text.split(/\r?\n/);
+        let addedCount = 0;
 
-                for (let i = 0; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (i === 0 && (columns[0].includes("ชื่อ") || columns[0].toLowerCase().includes("name"))) {
-                        continue; 
-                    }
+        for (let i = 0; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            
+            const columns = lines[i].split(',');
 
-                    if (columns.length >= 2) {
-                        const fullName = columns[0].replace(/["']/g, "").trim();
-                        const nickname = columns[1].replace(/["']/g, "").trim();
-                        const jerseyNo = columns[2] ? columns[2].trim() : "";
-                        const uGroup = columns[3] ? columns[3].trim().replace(/[uU]/g, "") : "New";
-                        const birthDate = columns[4] ? columns[4].trim() : "";
+            // ข้ามแถวหัวตารางหากตรวจพบข้อความหัวข้อ
+            if (i === 0 && (columns[0].includes("เบอร์") || columns[0].toLowerCase().includes("no") || columns[1].includes("ชื่อ"))) {
+                continue;
+            }
 
-                        players.push({
-                            id: "P_" + (Date.now() + Math.floor(Math.random() * 1000)), 
-                            name: fullName,
-                            nickname: nickname,
-                            no: jerseyNo,
-                            u: uGroup,
-                            birth: birthDate,
-                            avatar: "" 
-                        });
-                        addedCount++;
-                    }
-                }
+            // รองรับรูปแบบไฟล์ของคุณ: 23,ด.ช. ปุญญพัฒน์,อั่งเปา,15,2011-10-18
+            if (columns.length >= 3) {
+                const jerseyNo = columns[0] ? columns[0].replace(/["']/g, "").trim() : "";       // คอลัมน์ 1: เบอร์เสื้อ (23)
+                const fullName = columns[1] ? columns[1].replace(/["']/g, "").trim() : "";       // คอลัมน์ 2: ชื่อ-นามสกุล (ด.ช. ปุญญพัฒน์)
+                const nickname = columns[2] ? columns[2].replace(/["']/g, "").trim() : "";       // คอลัมน์ 3: ชื่อเล่น (อั่งเปา)
+                const uGroup   = columns[3] ? columns[3].trim().replace(/[uU]/g, "") : "New";    // คอลัมน์ 4: รุ่นอายุ (15)
+                const birthDate = columns[4] ? columns[4].trim() : "";                           // คอลัมน์ 5: วันเกิด (2011-10-18)
 
-                if (addedCount > 0) {
-                    showLoading(`กำลังบันทึกนักกีฬาใหม่ ${addedCount} คน ขึ้นกูเกิลชีต...`);
-                    pushDataToCloud(true);
-                    document.getElementById('csv-file-input').value = ""; 
-                    alert(`นำเข้าสำเร็จ! เพิ่มนักกีฬาใหม่ทั้งหมด ${addedCount} คน เข้าสู่ฐานข้อมูลคลาวด์เรียบร้อยครับ`);
-                    // อัปเดตรีเฟรชหน้าจอหลังจากนำเข้าข้อมูลเสร็จ
-                    refreshAllViews();
-                } else {
-                    hideLoading();
-                    alert("ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV กรุณาตรวจสอบความถูกต้องอีกครั้ง");
-                }
-            };
-            reader.readAsText(file, "UTF-8");
+                players.push({
+                    id: "P_" + (Date.now() + Math.floor(Math.random() * 1000)) + "_" + i,
+                    name: fullName,
+                    nickname: nickname,
+                    no: jerseyNo,
+                    u: uGroup,
+                    birth: birthDate,
+                    avatar: ""
+                });
+                addedCount++;
+            }
         }
+
+        if (addedCount > 0) {
+            showLoading(`กำลังบันทึกนักกีฬาใหม่ ${addedCount} คน ขึ้นกูเกิลชีต...`);
+            pushDataToCloud(true);
+            document.getElementById('csv-file-input').value = "";
+            alert(`นำเข้าสำเร็จ! เพิ่มนักกีฬาใหม่ทั้งหมด ${addedCount} คน เข้าสู่ฐานข้อมูลคลาวด์เรียบร้อยครับ`);
+            // อัปเดตรีเฟรชหน้าจอหลังจากนำเข้าข้อมูลเสร็จ
+            refreshAllViews();
+        } else {
+            hideLoading();
+            alert("ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV กรุณาตรวจสอบความถูกต้องอีกครั้ง");
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+}
 
         function refreshAllViews() {
             updateDashboardStats();
