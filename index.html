@@ -59,6 +59,20 @@
         </div>
 
         <section id="page-dashboard" class="tab-content hidden space-y-6">
+            <div id="db-status-banner" class="bg-white px-5 py-3 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-database text-gray-400 text-lg"></i>
+                    <span class="text-sm font-semibold text-gray-600">สถานะการเชื่อมต่อ Google Sheets:</span>
+                </div>
+                <div id="db-status-badge" class="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>Database Online</span>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500">
                     <p class="text-sm text-gray-500 font-medium">นักกีฬาทั้งหมดในระบบ</p>
@@ -452,20 +466,12 @@
             pushDataToCloud();
         }
 
-        // 🗑️ ฟังก์ชันลบนักกีฬาที่ซ้ำกันหรือต้องการนำออกจากระบบเด็ดขาด
         function deletePlayer(pid, name) {
-            if (confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลของ "${name}" ออกจากระบบถาวร? (การลบนี้จะถูกซิงค์ไปยัง Google Sheet ด้วย)`)) {
-                // 1. ลบออกจากอาเรย์หลัก
+            if (confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลของ "${name}" ออกจากระบบถาวร?`)) {
                 players = players.filter(p => p.id !== pid);
-                
-                // 2. เคลียร์ข้อมูลประวัติในส่วนอื่นๆ (ถ้ามี)
                 if (specialStatusDb[pid]) delete specialStatusDb[pid];
-                
-                // 3. บันทึกลงเครื่องและอัปเดตหน้าจอทั้งหมด
                 saveToLocalStorage();
                 refreshAllViews();
-                
-                // 4. สั่งสั่งซิงค์ขึ้น Google Sheet ทันทีเพื่อให้แถวบนคลาวด์หายไปด้วย
                 pushDataToCloud();
             }
         }
@@ -544,7 +550,6 @@
                     badgeOverlay = `<span class="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold px-1 rounded shadow transform translate-x-1 -translate-y-1">ลาออก</span>`;
                 }
 
-                // ✨ เพิ่มปุ่มลบ (Icon ถังขยะสีแดง) ถัดจากปุ่มแก้ไขเรียบร้อย
                 tbody.innerHTML += `
                     <tr class="hover:bg-gray-50/80 transition">
                         <td class="px-6 py-3.5 relative">
@@ -571,6 +576,7 @@
         function refreshAttendanceView() {
             const grid = document.getElementById('attendance-grid-layout');
             const reportTbody = document.getElementById('report-table-body');
+            if(!grid || !reportTbody) return;
             grid.innerHTML = '';
             reportTbody.innerHTML = '';
             
@@ -758,14 +764,39 @@
             });
         }
 
+        // 🔄 ฟังก์ชันอัปเดต Badge สีไฟสถานะเชื่อมต่อ Google Sheet บนหน้า Dashboard
+        function updateCloudStatusUI(isOnline) {
+            const badge = document.getElementById('db-status-badge');
+            if(!badge) return;
+            
+            if(isOnline) {
+                badge.className = "flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200";
+                badge.innerHTML = `
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>Database Online</span>
+                `;
+            } else {
+                badge.className = "flex items-center space-x-2 bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200 animate-bounce";
+                badge.innerHTML = `
+                    <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                    <span>Database Offline</span>
+                `;
+            }
+        }
+
         async function pushDataToCloud() {
             showLoadingSpinner(true);
             const encodedData = encodeURIComponent(JSON.stringify({ players: players, attendance: attendanceDb }));
             try {
                 const response = await fetch(`${CONFIG.API_URL}?action=sync_all&data=${encodedData}`, { method: "GET" });
                 await response.json();
+                updateCloudStatusUI(true); // ✅ ไฟเขียว Online
             } catch (e) {
                 console.error("Cloud Sync Error:", e);
+                updateCloudStatusUI(false); // ❌ ไฟแดง Offline หาก Fetch พังหรือเน็ตหลุด
             } finally {
                 showLoadingSpinner(false);
             }
@@ -788,24 +819,34 @@
                 else u++;
             });
 
-            document.getElementById('dash-total-players').innerText = active + " คน";
-            document.getElementById('dash-present-players').innerText = p + " คน";
-            document.getElementById('dash-absent-players').innerText = (l + a) + " คน";
-            document.getElementById('dash-excluded-players').innerText = excluded + " คน";
+            const totalEl = document.getElementById('dash-total-players');
+            if(totalEl) totalEl.innerText = active + " คน";
+            const presentEl = document.getElementById('dash-present-players');
+            if(presentEl) presentEl.innerText = p + " คน";
+            const absentEl = document.getElementById('dash-absent-players');
+            if(absentEl) absentEl.innerText = (l + a) + " คน";
+            const exclEl = document.getElementById('dash-excluded-players');
+            if(exclEl) exclEl.innerText = excluded + " คน";
 
-            if(chartInstanceAge) chartInstanceAge.destroy();
-            chartInstanceAge = new Chart(document.getElementById('chart-age-groups').getContext('2d'), {
-                type: 'pie',
-                data: { labels: Object.keys(uMap).map(x=>"รุ่น U"+x), datasets: [{ data: Object.values(uMap), backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'] }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
+            const ctxAge = document.getElementById('chart-age-groups');
+            if(ctxAge) {
+                if(chartInstanceAge) chartInstanceAge.destroy();
+                chartInstanceAge = new Chart(ctxAge.getContext('2d'), {
+                    type: 'pie',
+                    data: { labels: Object.keys(uMap).map(x=>"รุ่น U"+x), datasets: [{ data: Object.values(uMap), backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
 
-            if(chartInstanceAtt) chartInstanceAtt.destroy();
-            chartInstanceAtt = new Chart(document.getElementById('chart-attendance').getContext('2d'), {
-                type: 'bar',
-                data: { labels: ['มาซ้อม', 'ลากิจ/ป่วย', 'ขาดซ้อม', 'ยังไม่เช็ค'], datasets: [{ label: 'คน', data: [p, l, a, u], backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#9CA3AF'] }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
+            const ctxAtt = document.getElementById('chart-attendance');
+            if(ctxAtt) {
+                if(chartInstanceAtt) chartInstanceAtt.destroy();
+                chartInstanceAtt = new Chart(ctxAtt.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: ['มาซ้อม', 'ลากิจ/ป่วย', 'ขาดซ้อม', 'ยังไม่เช็ค'], datasets: [{ label: 'คน', data: [p, l, a, u], backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#9CA3AF'] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
         }
 
         function saveToLocalStorage() {
@@ -814,7 +855,10 @@
             localStorage.setItem('specialStatus', JSON.stringify(specialStatusDb));
         }
 
-        function showLoadingSpinner(val) { document.getElementById('loading-spinner').classList.toggle('hidden', !val); }
+        function showLoadingSpinner(val) { 
+            const spinner = document.getElementById('loading-spinner');
+            if(spinner) spinner.classList.toggle('hidden', !val); 
+        }
         
         function openAddPlayerModal() {
             document.getElementById('modal-title-text').innerText = "เพิ่มนักกีฬาใหม่";
