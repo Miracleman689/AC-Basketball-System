@@ -197,7 +197,7 @@
                                 <th class="p-3 border border-gray-300">ชื่อ-นามสกุล</th>
                                 <th class="p-3 border border-gray-300">ชื่อเล่น</th>
                                 <th class="p-3 border border-gray-300">รุ่นอายุ</th>
-                                <th class="p-3 border border-gray-300">Visual สถานะ</th>
+                                <th class="p-3 border border-gray-300">Visual Status</th>
                                 <th class="p-3 border border-gray-300">หมายเหตุ</th>
                             </tr>
                         </thead>
@@ -300,7 +300,7 @@
     </div>
 
     <script>
-        // 🔒 อัปเดตผูก API URL ชุดล่าสุดของคุณ Kittichon ให้ทำงานเชื่อมโยงกันสมบูรณ์ทุกฟังก์ชัน
+        // 🔒 URL ของ API ในการเชื่อมต่อ Google Sheets 
         const CONFIG = {
             API_URL: "https://script.google.com/macros/s/AKfycbxwcYjjUFot818XBetEbyHJL4wNiZk7CapX5dKP1_1IBhCUjUiUTyA2M65Y6p_8GxB3hA/exec"
         };
@@ -308,7 +308,7 @@
         let players = [];
         let attendanceDb = {};
         let specialStatusDb = {}; 
-        let currentPlayerTabMode = 'active'; // 'active' = ปัจจุบัน, 'excluded' = ไม่ผ่าน/ลาออก
+        let currentPlayerTabMode = 'active'; 
         
         let chartInstanceAge = null;
         let chartInstanceAtt = null;
@@ -378,7 +378,6 @@
             return document.getElementById('attendance-date-picker').value;
         }
 
-        // 🚀 ปรับปรุงระบบ Import CSV: เมื่ออ่านเสร็จแล้วสั่ง Push ซิงค์ขึ้น Google Sheet ทันที
         function handleCSVImport(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -407,8 +406,8 @@
                 if (addedCount > 0) {
                     saveToLocalStorage();
                     refreshAllViews();
-                    pushDataToCloud(); // ส่งขึ้นระบบคลาวด์ Google Sheet ทันทีหลังอัปโหลด
-                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คน และกำลังซิงค์ข้อมูลลง Google Sheets...`);
+                    pushDataToCloud(); 
+                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คน และซิงค์ลง Google Sheets เรียบร้อย!`);
                 }
             };
             reader.readAsText(file, "UTF-8");
@@ -451,6 +450,24 @@
             saveToLocalStorage();
             refreshAllViews();
             pushDataToCloud();
+        }
+
+        // 🗑️ ฟังก์ชันลบนักกีฬาที่ซ้ำกันหรือต้องการนำออกจากระบบเด็ดขาด
+        function deletePlayer(pid, name) {
+            if (confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลของ "${name}" ออกจากระบบถาวร? (การลบนี้จะถูกซิงค์ไปยัง Google Sheet ด้วย)`)) {
+                // 1. ลบออกจากอาเรย์หลัก
+                players = players.filter(p => p.id !== pid);
+                
+                // 2. เคลียร์ข้อมูลประวัติในส่วนอื่นๆ (ถ้ามี)
+                if (specialStatusDb[pid]) delete specialStatusDb[pid];
+                
+                // 3. บันทึกลงเครื่องและอัปเดตหน้าจอทั้งหมด
+                saveToLocalStorage();
+                refreshAllViews();
+                
+                // 4. สั่งสั่งซิงค์ขึ้น Google Sheet ทันทีเพื่อให้แถวบนคลาวด์หายไปด้วย
+                pushDataToCloud();
+            }
         }
 
         function setSpecialStatus(statusType) {
@@ -527,6 +544,7 @@
                     badgeOverlay = `<span class="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold px-1 rounded shadow transform translate-x-1 -translate-y-1">ลาออก</span>`;
                 }
 
+                // ✨ เพิ่มปุ่มลบ (Icon ถังขยะสีแดง) ถัดจากปุ่มแก้ไขเรียบร้อย
                 tbody.innerHTML += `
                     <tr class="hover:bg-gray-50/80 transition">
                         <td class="px-6 py-3.5 relative">
@@ -540,8 +558,9 @@
                         <td class="px-6 py-3.5 text-blue-600 font-bold">${p.nickname}</td>
                         <td class="px-6 py-3.5"><span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">U${p.u}</span></td>
                         <td class="px-6 py-3.5 text-gray-500">${p.birth || "ไม่ระบุ"}</td>
-                        <td class="px-6 py-3.5 text-right space-x-1">
-                            <button onclick="openEditProfileModal('${p.id}')" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded transition" title="แก้ไขไฟล์"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <td class="px-6 py-3.5 text-right space-x-1 whitespace-nowrap">
+                            <button onclick="openEditProfileModal('${p.id}')" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded transition" title="แก้ไขข้อมูล"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button onclick="deletePlayer('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ลบข้อมูลถาวร"><i class="fa-solid fa-trash-can"></i></button>
                             ${specialStatusDb[p.id] ? `<button onclick="clearSpecialStatus('${p.id}')" class="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="ดึงกลับเป็นนักกีฬาปกติ"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
                         </td>
                     </tr>
@@ -739,12 +758,10 @@
             });
         }
 
-        // 🔒 ฟังก์ชันบันทึกข้อมูลหลัก: ตรวจสอบและบังคับส่งลิงก์ชุดใหม่ CONFIG.API_URL ไปยังเซิร์ฟเวอร์โดยตรง
         async function pushDataToCloud() {
             showLoadingSpinner(true);
             const encodedData = encodeURIComponent(JSON.stringify({ players: players, attendance: attendanceDb }));
             try {
-                // ใช้ตัวแปร CONFIG.API_URL ล่าสุดที่ถูกต้องเสมอ
                 const response = await fetch(`${CONFIG.API_URL}?action=sync_all&data=${encodedData}`, { method: "GET" });
                 await response.json();
             } catch (e) {
