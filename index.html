@@ -17,848 +17,1304 @@
         @media print {
             body * { visibility: hidden; }
             #print-report-area, #print-report-area * { visibility: visible; }
-            #print-report-area { position: absolute; left: 0; top: 0; width: 100%; }
+            #print-report-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; background: white; color: black; padding: 15mm; box-sizing: border-box; }
+            .no-print { display: none !important; }
+            textarea { border: none !important; resize: none !important; background: transparent !important; padding: 0 !important; }
+        }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; font-weight: bold; }
+        .profile-image-container { position: relative; }
+        .status-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-radius: 0.75rem;
+            z-index: 10;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100">
 
-    <nav class="theme-bg-dark text-white px-6 py-4 flex justify-between items-center shadow-md">
-        <div class="flex items-center space-x-3">
-            <i class="fa-solid fa-basketball text-3xl text-yellow-500 animate-spin-slow"></i>
-            <div>
-                <h1 class="text-xl font-bold tracking-wide">AC BASKETBALL SYSTEM</h1>
-                <p class="text-xs text-gray-400">ระบบบริหารจัดการและเช็คชื่อนักกีฬาออนไลน์</p>
+    <div id="loading-screen" class="loading-overlay">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-white mb-4"></div>
+        <p class="text-lg" id="loading-text">กำลังเชื่อมต่อฐานข้อมูล Google Sheets ออนไลน์...</p>
+    </div>
+
+    <nav class="theme-bg-dark text-white p-4 sticky top-0 z-50 shadow-md no-print">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold theme-text-red text-xl shadow">AC</div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wider">AC BASKETBALL SYSTEM</h1>
+                    <p class="text-xs text-green-400"><i class="fa-solid fa-cloud text-[10px] animate-pulse"></i> Google Sheets Cloud Connected</p>
+                </div>
             </div>
-        </div>
-        <div class="flex items-center space-x-4">
-            <span id="cloud-status" class="bg-green-500 text-white text-xs px-3 py-1 rounded-full flex items-center">
-                <span class="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span> เชื่อมต่อระบบคลาวด์แล้ว
-            </span>
-            <button onclick="fetchDataFromCloud()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-lg transition flex items-center space-x-1 shadow">
-                <i class="fa-solid fa-arrows-rotate"></i> <span>ดึงข้อมูลล่าสุด</span>
-            </button>
+            <div class="text-right flex items-center space-x-4">
+                <div class="hidden md:block">
+                    <span class="text-sm mr-2 text-gray-300">เลือกวันที่ซ้อม/แก้ไขย้อนหลัง:</span>
+                    <input type="date" id="currentAttendanceDate" class="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700 cursor-pointer" onchange="changeAttendanceDate(this.value)">
+                </div>
+                <button onclick="syncDataFromCloud(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition flex items-center space-x-1 cursor-pointer">
+                    <i class="fa-solid fa-sync"></i> <span>รีเฟรชดึงข้อมูลล่าสุด</span>
+                </button>
+            </div>
         </div>
     </nav>
 
-    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex flex-col justify-center items-center hidden">
-        <div class="relative flex justify-center items-center mb-4">
-            <div class="w-20 h-20 border-4 border-dashed border-red-500 rounded-full animate-spin"></div>
-            <i class="fa-solid fa-basketball text-3xl text-yellow-500 absolute animate-bounce"></i>
-        </div>
-        <p id="loading-text" class="text-white text-lg font-medium tracking-wide">กำลังทำงาน...</p>
+    <div class="bg-white border-b border-gray-200 p-2 flex justify-around md:justify-start md:space-x-2 shadow-sm overflow-x-auto whitespace-nowrap no-print">
+        <button onclick="switchTab('dashboard')" id="btn-dashboard" class="tab-btn px-4 py-2 rounded-lg font-semibold theme-bg-red text-white flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span>
+        </button>
+        <button onclick="switchTab('attendance')" id="btn-attendance" class="tab-btn px-4 py-2 rounded-lg font-semibold text-gray-600 hover:bg-gray-100 flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-clipboard-user"></i> <span>เช็คชื่อการซ้อม</span>
+        </button>
+        <button onclick="switchTab('players')" id="btn-players" class="tab-btn px-4 py-2 rounded-lg font-semibold text-gray-600 hover:bg-gray-100 flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-users"></i> <span>ลงทะเบียน/Database</span>
+        </button>
+        <button onclick="switchTab('qr-scan')" id="btn-qr-scan" class="tab-btn px-4 py-2 rounded-lg font-semibold text-gray-600 hover:bg-gray-100 flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-qrcode"></i> <span>QR Check-in</span>
+        </button>
+        <button onclick="switchTab('profiles')" id="btn-profiles" class="tab-btn px-4 py-2 rounded-lg font-semibold text-gray-600 hover:bg-gray-100 flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-id-card"></i> <span>ข้อมูลนักกีฬา</span>
+        </button>
+        <button onclick="switchTab('report')" id="btn-report" class="tab-btn px-4 py-2 rounded-lg font-semibold text-gray-600 hover:bg-gray-100 flex items-center space-x-2 cursor-pointer">
+            <i class="fa-solid fa-file-invoice"></i> <span>Report รายบุคคล</span>
+        </button>
     </div>
 
-    <div class="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <aside class="lg:col-span-3 space-y-6">
-            <div class="bg-white rounded-2xl p-4 shadow-sm space-y-2">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">เมนูการทำงาน</h3>
-                <button onclick="switchTab('dashboard')" id="btn-tab-dashboard" class="w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium bg-red-50 text-red-600">
-                    <i class="fa-solid fa-chart-pie text-lg"></i> <span>แดชบอร์ดข้อมูล</span>
-                </button>
-                <button onclick="switchTab('attendance')" id="btn-tab-attendance" class="w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium text-gray-600 hover:bg-gray-50">
-                    <i class="fa-solid fa-clipboard-user text-lg"></i> <span>บันทึกเข้าซ้อม</span>
-                </button>
-                <button onclick="switchTab('players')" id="btn-tab-players" class="w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium text-gray-600 hover:bg-gray-50">
-                    <i class="fa-solid fa-users text-lg"></i> <span>ฐานข้อมูลนักกีฬา</span>
-                </button>
-                <button onclick="switchTab('qr')" id="btn-tab-qr" class="w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium text-gray-600 hover:bg-gray-50">
-                    <i class="fa-solid fa-qrcode text-lg"></i> <span>ระบบเช็คชื่อด้วย QR</span>
-                </button>
-                <button onclick="switchTab('report')" id="btn-tab-report" class="w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium text-gray-600 hover:bg-gray-50">
-                    <i class="fa-solid fa-file-invoice text-lg"></i> <span>รายงานและสรุปยอด</span>
-                </button>
-            </div>
+    <main class="container mx-auto p-4 max-w-7xl">
+        <div class="md:hidden mb-4 bg-white p-3 rounded-lg shadow-sm flex justify-between items-center no-print">
+            <span class="text-gray-600 font-medium">วันที่ซ้อม/แก้ไขย้อนหลัง:</span>
+            <input type="date" id="currentAttendanceDateMobile" class="bg-gray-100 px-3 py-1 rounded border border-gray-300 cursor-pointer" onchange="changeAttendanceDate(this.value)">
+        </div>
 
-            <div id="date-picker-widget" class="bg-white rounded-2xl p-4 shadow-sm hidden">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">เลือกวันที่ซ้อม</h3>
-                <input type="date" id="attendance-date" onchange="onDateChanged()" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-medium">
-            </div>
-
-            <div class="bg-gradient-to-br from-slate-800 to-slate-900 text-white rounded-2xl p-5 shadow">
-                <h3 class="text-sm font-semibold text-gray-400 mb-3">สถิติมวลรวมวันนี้</h3>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white bg-opacity-10 p-3 rounded-xl text-center">
-                        <span class="text-2xl font-bold block" id="stat-total-p">0</span>
-                        <span class="text-xs text-gray-300">นักกีฬาทั้งหมด</span>
-                    </div>
-                    <div class="bg-white bg-opacity-10 p-3 rounded-xl text-center">
-                        <span class="text-2xl font-bold text-green-400 block" id="stat-present-p">0</span>
-                        <span class="text-xs text-gray-300">มาซ้อมวันนี้</span>
-                    </div>
+        <section id="tab-dashboard" class="tab-content block space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-xl shadow-sm gap-4">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-gauge-high theme-text-red"></i> แผงควบคุมและสรุปผลภาพรวมออนไลน์
+                </h2>
+                <div class="flex items-center space-x-2 w-full md:w-auto">
+                    <span class="text-sm text-gray-600 font-medium whitespace-nowrap"><i class="fa-solid fa-calendar-week text-indigo-600"></i> ช่วงเวลาสถิติสะสม:</span>
+                    <select id="dashboard-week-filter" onchange="updateWeeklyPieChart()" class="bg-gray-50 border border-gray-300 text-gray-700 p-2 rounded-lg text-sm font-semibold cursor-pointer w-full md:w-56 focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">สะสมทั้งหมดทุกเวลา</option>
+                        <option value="CURRENT_WEEK" selected>สัปดาห์ปัจจุบัน (7 วันล่าสุด)</option>
+                        <option value="LAST_2_WEEKS">ย้อนหลัง 2 สัปดาห์ (14 วัน)</option>
+                        <option value="LAST_4_WEEKS">ย้อนหลัง 4 สัปดาห์ (28 วัน)</option>
+                    </select>
                 </div>
             </div>
-        </aside>
 
-        <main class="lg:col-span-9">
-            
-            <section id="tab-dashboard" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border-b-4 border-blue-500 flex items-center space-x-4">
-                        <div class="p-4 bg-blue-50 text-blue-600 rounded-xl"><i class="fa-solid fa-user-check text-2xl"></i></div>
-                        <div>
-                            <span class="text-gray-400 text-sm block">อัตราการมาซ้อมเฉลี่ย</span>
-                            <span class="text-2xl font-bold text-gray-800" id="dash-rate">0%</span>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border-b-4 border-green-500 flex items-center space-x-4">
-                        <div class="p-4 bg-green-50 text-green-600 rounded-xl"><i class="fa-solid fa-cake-candles text-2xl"></i></div>
-                        <div>
-                            <span class="text-gray-400 text-sm block">เกิดในเดือนนี้</span>
-                            <span class="text-2xl font-bold text-gray-800" id="dash-birthday">0 คน</span>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border-b-4 border-purple-500 flex items-center space-x-4">
-                        <div class="p-4 bg-purple-50 text-purple-600 rounded-xl"><i class="fa-solid fa-calendar-days text-2xl"></i></div>
-                        <div>
-                            <span class="text-gray-400 text-sm block">จำนวนรอบการซ้อม</span>
-                            <span class="text-2xl font-bold text-gray-800" id="dash-sessions">0 รอบ</span>
-                        </div>
-                    </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-600">
+                    <p class="text-sm text-gray-500 font-medium">นักกีฬาทั้งหมด (Active)</p>
+                    <p class="text-3xl font-bold text-gray-800" id="stat-total-players">0</p>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white rounded-2xl p-5 shadow-sm">
-                        <h4 class="font-bold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fa-solid fa-chart-bar text-blue-500"></i> <span>ยอดนักกีฬาแยกตามรุ่นอายุ (U)</span>
-                        </h4>
-                        <div class="relative h-64"><canvas id="chart-u-group"></canvas></div>
-                    </div>
-                    <div class="bg-white rounded-2xl p-5 shadow-sm">
-                        <h4 class="font-bold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fa-solid fa-chart-line text-green-500"></i> <span>สถิติการเช็คชื่อซ้อม 7 วันล่าสุด</span>
-                        </h4>
-                        <div class="relative h-64"><canvas id="chart-attendance-trend"></canvas></div>
-                    </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500">
+                    <p class="text-sm text-gray-500 font-medium">เข้าซ้อมวันนี้</p>
+                    <p class="text-3xl font-bold text-green-600" id="stat-present">0</p>
                 </div>
-
-                <div class="bg-white rounded-2xl p-5 shadow-sm">
-                    <h4 class="font-bold text-gray-800 mb-3 text-sm flex items-center space-x-2">
-                        <i class="fa-solid fa-gift text-red-500"></i> <span>🎉 สุขสันต์วันเกิดนักกีฬาเดือนนี้</span>
-                    </h4>
-                    <div id="birthday-list-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
-                        </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500">
+                    <p class="text-sm text-gray-500 font-medium">ขาดซ้อมวันนี้</p>
+                    <p class="text-3xl font-bold text-red-600" id="stat-absent">0</p>
                 </div>
-            </section>
+                <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500">
+                    <p class="text-sm text-gray-500 font-medium">อัตราการเข้าซ้อมวันนี้</p>
+                    <p class="text-3xl font-bold text-amber-600" id="stat-rate">0%</p>
+                </div>
+            </div>
 
-            <section id="tab-attendance" class="space-y-4 hidden">
-                <div class="bg-white rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-2">
+                    <h3 class="text-md font-bold text-gray-800 mb-4"><i class="fa-solid fa-chart-column theme-text-red"></i> สถิติแยกตามรุ่นอายุวันนี้</h3>
+                    <div class="relative h-96"><canvas id="attendanceChart"></canvas></div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm flex flex-col justify-between">
                     <div>
-                        <h2 class="text-lg font-bold text-gray-800">ลงชื่อเข้าร่วมการซ้อมประจำวัน</h2>
-                        <p class="text-xs text-gray-400">กรุณาเลือกปุ่มสถานะของนักกีฬาแต่ละคน ระบบจะเซฟขึ้นฐานข้อมูลออโต้</p>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-md font-bold text-gray-800"><i class="fa-solid fa-chart-pie text-emerald-500"></i> สัดส่วนบันทึกสะสมช่วงเวลาที่เลือก</h3>
+                        </div>
+                        <div class="relative h-80 w-full flex items-center justify-center p-2"><canvas id="weeklyPieChart"></canvas></div>
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <button onclick="setAllAttendance('✓')" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs px-3 py-2 rounded-xl transition font-medium">มาซ้อมทั้งหมด</button>
-                        <button onclick="setAllAttendance('✕')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-2 rounded-xl transition font-medium">ขาดทั้งหมด</button>
+                    <div id="weekly-pie-summary" class="text-center text-xs text-gray-500 mt-2 border-t pt-2 font-medium">มา 0 | ขาด 0 | ลา 0 | วันหยุด 0</div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-sm">
+                <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fa-solid fa-bell text-amber-500"></i> หมายเหตุการลา/บาดเจ็บ/วันหยุดวันนี้</h3>
+                <div class="overflow-y-auto max-h-48 space-y-2" id="leave-notes-list"></div>
+            </div>
+        </section>
+
+        <section id="tab-attendance" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-2 w-full md:w-auto">
+                    <span class="font-semibold text-gray-700 min-w-[70px]">กรองรุ่นอายุ:</span>
+                    <select id="filter-u-attendance" onchange="loadAttendanceSheet()" class="w-full md:w-40 p-2 border rounded-lg cursor-pointer">
+                        <option value="ALL">ทั้งหมดทุกรุ่น</option>
+                        <option value="12">รุ่น U12</option><option value="13">รุ่น U13</option><option value="14">รุ่น U14</option>
+                        <option value="15">รุ่น U15</option><option value="16">รุ่น U16</option><option value="17">รุ่น U17</option>
+                        <option value="18">รุ่น U18</option><option value="New">นักกีฬาใหม่</option>
+                    </select>
+                </div>
+                <div class="flex space-x-2 w-full md:w-auto justify-end">
+                    <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm flex items-center space-x-2 cursor-pointer">
+                        <i class="fa-solid fa-file-excel"></i> <span>Export CSV</span>
+                    </button>
+                    <button onclick="markAllPresent()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm text-sm cursor-pointer">มาทุกคน (คลิกเดียว)</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="theme-bg-dark text-white text-sm">
+                                <th class="p-3 pl-4 w-16">No.</th>
+                                <th class="p-3 w-20 text-center">รูปถ่าย</th>
+                                <th class="p-3">ชื่อ-นามสกุล (ชื่อเล่น)</th>
+                                <th class="p-3 w-24">รุ่น</th>
+                                <th class="p-3 text-center w-96">สถานะการเข้าซ้อม</th>
+                                <th class="p-3">หมายเหตุ / เหตุผล</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-center md:justify-end pt-2">
+                <button onclick="submitAttendanceSheet()" class="w-full md:w-56 bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-bold shadow-md flex items-center justify-center space-x-2 text-md cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-up text-lg"></i> <span>บันทึกขึ้น Google Sheets</span>
+                </button>
+            </div>
+        </section>
+
+        <section id="tab-players" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm h-fit space-y-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fa-solid fa-user-plus theme-text-red"></i> ลงทะเบียนเพิ่มนักกีฬา</h3>
+                        <form id="add-player-form" onsubmit="addPlayer(event)" class="space-y-4">
+                            <div class="flex flex-col items-center justify-center p-3 border-2 border-dashed rounded-xl bg-gray-50">
+                                <div id="image-preview-container" class="w-24 h-24 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center text-gray-400 mb-2 border relative shadow-inner">
+                                    <i class="fa-solid fa-user text-3xl" id="avatar-placeholder-icon"></i>
+                                    <img id="player-avatar-preview" src="" class="w-full h-full object-cover hidden">
+                                </div>
+                                <label class="bg-white border text-gray-700 px-3 py-1 rounded-md text-xs font-semibold shadow-sm cursor-pointer flex items-center space-x-1">
+                                    <i class="fa-solid fa-camera"></i> <span>เพิ่มรูปภาพนักกีฬา</span>
+                                    <input type="file" id="p-avatar" accept="image/*" class="hidden" onchange="previewPlayerImage(event)">
+                                </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
+                                <input type="text" id="p-fullname" required class="w-full p-2 border rounded-lg text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อเล่น</label>
+                                    <input type="text" id="p-nickname" required class="w-full p-2 border rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">หมายเลขเสื้อ (No.)</label>
+                                    <input type="number" id="p-number" class="w-full p-2 border rounded-lg text-sm">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นอายุ (U)</label>
+                                    <select id="p-u" class="w-full p-2 border rounded-lg text-sm">
+                                        <option value="12">U12</option><option value="13">U13</option><option value="14">U14</option>
+                                        <option value="15">U15</option><option value="16">U16</option><option value="17">U17</option>
+                                        <option value="18">U18</option><option value="New">นักกีฬาใหม่</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">วันเกิด</label>
+                                    <input type="date" id="p-birth" class="w-full p-2 border rounded-lg text-sm">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full theme-bg-red hover:bg-red-700 text-white p-2.5 rounded-lg font-bold transition cursor-pointer text-sm">
+                                <i class="fa-solid fa-plus"></i> เพิ่มข้อมูลรายบุคคลเข้าคลาวด์
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="border-t pt-4">
+                        <h3 class="text-md font-bold text-gray-800 mb-2"><i class="fa-solid fa-file-csv text-blue-500"></i> นำเข้าข้อมูลด้วยไฟล์ CSV (ทีละหลายคน)</h3>
+                        <p class="text-xs text-gray-500 mb-3">โครงสร้างไฟล์: ชื่อ-นามสกุล, ชื่อเล่น, เบอร์เสื้อ, รุ่นอายุ(เลข), วันเกิด(ปปปป-ดด-วว)</p>
+                        <label class="w-full bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg font-bold transition cursor-pointer flex items-center justify-center space-x-2 text-sm shadow-sm">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> <span>เลือกไฟล์นักกีฬา (.CSV)</span>
+                            <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleCSVImport(event)">
+                        </label>
                     </div>
                 </div>
 
-                <div id="attendance-list-container" class="space-y-3">
+                <div class="bg-white p-5 rounded-xl shadow-sm lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800"><i class="fa-solid fa-users-gear text-blue-600"></i> รายชื่อรวมในฐานข้อมูลออนไลน์</h3>
+                        <span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-semibold" id="player-count">0 คน</span>
                     </div>
-            </section>
-
-            <section id="tab-players" class="space-y-6 hidden">
-                <div class="bg-white rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div class="flex-1 relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
-                        <input type="text" id="search-player-input" oninput="renderPlayersList()" placeholder="ค้นหาชื่อ, ชื่อเล่น หรือเบอร์เสื้อ..." class="w-full bg-gray-50 rounded-xl pl-11 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-100">
-                    </div>
-                    <div class="flex items-center space-x-2 flex-wrap">
-                        <button onclick="openAddPlayerModal()" class="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2.5 rounded-xl transition font-medium flex items-center space-x-1 shadow">
-                            <i class="fa-solid fa-user-plus"></i> <span>เพิ่มนักกีฬา</span>
-                        </button>
-                        <input type="file" id="csv-file-input" accept=".csv" onchange="handleCSVImport(event)" class="hidden">
-                        <button onclick="document.getElementById('csv-file-input').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2.5 rounded-xl transition font-medium flex items-center space-x-1 shadow">
-                            <i class="fa-solid fa-file-csv"></i> <span>นำเข้า CSV</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
+                        <table class="w-full text-left text-sm">
                             <thead>
-                                <tr class="bg-slate-800 text-white text-sm font-medium">
-                                    <th class="py-3.5 px-4 text-center w-16">No.</th>
-                                    <th class="py-3.5 px-4 w-20">รูป</th>
-                                    <th class="py-3.5 px-4">ชื่อ-นามสกุล (ชื่อเล่น)</th>
-                                    <th class="py-3.5 px-4 text-center w-20">รุ่น</th>
-                                    <th class="py-3.5 px-4 text-center w-40">การจัดการ</th>
+                                <tr class="bg-gray-100 text-gray-700 uppercase">
+                                    <th class="p-2 pl-4 w-16">No.</th>
+                                    <th class="p-2 w-16 text-center">รูป</th>
+                                    <th class="p-2">ชื่อ - ชื่อเล่น</th>
+                                    <th class="p-2 w-20">รุ่น U</th>
+                                    <th class="p-2 text-center w-16">จัดการ</th>
                                 </tr>
                             </thead>
-                            <tbody id="players-table-body" class="divide-y divide-gray-100 text-sm">
-                                </tbody>
+                            <tbody id="players-list-table-body" class="divide-y divide-gray-100"></tbody>
                         </table>
                     </div>
                 </div>
-            </section>
+            </div>
+        </section>
 
-            <section id="tab-qr" class="space-y-6 hidden">
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-                    
-                    <div class="md:col-span-7 bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center min-h-[400px]">
-                        <h3 class="font-bold text-gray-800 mb-4 text-center flex items-center space-x-2">
-                            <i class="fa-solid fa-camera text-red-500"></i> <span>กล้องสแกนคิวอาร์โค้ดหน้าสนาม</span>
-                        </h3>
-                        
-                        <div class="w-full max-w-sm aspect-square bg-slate-900 rounded-2xl relative flex items-center justify-center overflow-hidden border-4 border-slate-800 shadow-inner">
-                            <div id="camera-placeholder" class="text-center text-gray-500 p-6">
-                                <i class="fa-solid fa-video-slash text-5xl mb-3 block"></i>
-                                <span class="text-xs">กล้องยังไม่เปิดใช้งาน สแกนจำลองผ่านกล่องรับข้อมูลขวาแทนได้</span>
-                            </div>
-                            <video id="webcam-video" class="w-full h-full object-cover hidden" autoplay playsinline></video>
-                            <div class="absolute inset-6 border-2 border-red-500 border-dashed rounded-xl opacity-40 animate-pulse pointer-events-none"></div>
-                        </div>
+        <section id="tab-qr-scan" class="tab-content hidden max-w-md mx-auto">
+            <div class="bg-white p-6 rounded-2xl shadow-md text-center space-y-5 border">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-gray-800"><i class="fa-solid fa-camera theme-text-red"></i> QR/Camera Check-in</h3>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="startCameraStream()" class="bg-green-600 text-white p-2 rounded-xl text-sm font-bold">เปิดกล้อง</button>
+                    <button onclick="stopCameraStream()" class="bg-red-600 text-white p-2 rounded-xl text-sm font-bold">ปิดกล้อง</button>
+                </div>
+                <div class="bg-gray-900 text-white h-64 rounded-xl flex items-center justify-center relative overflow-hidden">
+                    <video id="webcam-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                    <p id="camera-placeholder" class="text-sm text-gray-400">กล้องปิดอยู่</p>
+                </div>
+                <div class="space-y-3">
+                    <input type="text" id="qr-input-mock" placeholder="พิมพ์ชื่อเล่น หรือเลขเสื้อ..." class="w-full p-3 border rounded-xl font-semibold text-center">
+                    <button onclick="handleQRCheckInWithPhoto()" class="w-full theme-bg-dark text-white p-3 rounded-xl font-bold">ถ่ายรูปบันทึกเช็คชื่อเข้าซ้อมออนไลน์</button>
+                </div>
+            </div>
+        </section>
 
-                        <div class="flex space-x-2 mt-4">
-                            <button onclick="startCameraScanner()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs px-4 py-2 rounded-xl transition font-medium">เปิดกล้อง</button>
-                            <button onclick="stopCameraScanner()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-4 py-2 rounded-xl transition font-medium">ปิดกล้อง</button>
-                        </div>
-                    </div>
+        <section id="tab-profiles" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm mb-2">
+                <p class="text-sm text-gray-600 font-semibold"><i class="fa-solid fa-circle-info text-blue-500"></i> แสดงสถิติการมาซ้อมรายบุคคลในสัปดาห์ปัจจุบัน (จันทร์ - ศุกร์)</p>
+            </div>
+            <div id="profiles-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
 
-                    <div class="md:col-span-5 bg-white rounded-2xl p-5 shadow-sm flex flex-col">
-                        <h3 class="font-bold text-gray-800 mb-3 text-sm"><i class="fa-solid fa-keyboard text-blue-500"></i> คีย์ข้อมูลด่วน (จำลองสแกน)</h3>
-                        <div class="flex space-x-2 mb-4">
-                            <input type="text" id="qr-input-mock" placeholder="พิมพ์ชื่อเล่น หรือเบอร์เสื้อ..." class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onkeypress="if(event.key === 'Enter') handleQRCheckInWithPhoto()">
-                            <button onclick="handleQRCheckInWithPhoto()" class="bg-red-600 hover:bg-red-700 text-white text-xs px-4 py-2 rounded-xl transition font-medium">ตกลง</button>
-                        </div>
+        <section id="tab-report" class="tab-content hidden space-y-4 no-print">
+            <div class="bg-white p-5 rounded-xl shadow-sm flex justify-between items-center border">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-semibold text-gray-700">เลือกนักกีฬา:</span>
+                    <select id="report-player-select" onchange="generateIndividualReport()" class="p-2 border rounded-lg text-sm bg-white min-w-[220px]"></select>
+                </div>
+                <button onclick="window.print()" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold text-sm transition shadow">
+                    <i class="fa-solid fa-print"></i> พิมพ์รายงาน A4
+                </button>
+            </div>
+            <div id="individual-report-area" class="bg-gray-200 p-4 rounded-2xl flex justify-center overflow-x-auto">
+                <div id="print-report-area" class="bg-white text-black p-12 shadow-2xl" style="width: 210mm; min-height: 297mm;">
+                    <p class="text-center text-gray-400 mt-20">กรุณาเลือกรายชื่อนักกีฬาเพื่อประมวลผลรายงาน</p>
+                </div>
+            </div>
+        </section>
+    </main>
 
-                        <h4 class="font-bold text-xs text-gray-400 uppercase tracking-wider mb-2">ประวัติการสแกนสำเร็จวันนี้</h4>
-                        <div id="qr-log-container" class="flex-1 overflow-y-auto max-h-64 space-y-2 text-xs pr-1">
-                            </div>
+    <div id="edit-attendance-modal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white p-6 rounded-2xl max-w-md w-full shadow-2xl">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-lg font-bold text-gray-900">แก้ไขบันทึกย้อนหลังระบบออนไลน์</h3>
+                <button onclick="closeAttendanceEditModal()" class="text-gray-400 text-xl font-bold">×</button>
+            </div>
+            <form id="edit-attendance-form" onsubmit="saveEditedAttendance(event)" class="space-y-4">
+                <input type="hidden" id="edit-att-pid">
+                <div>
+                    <p class="text-sm text-gray-700">นักกีฬา: <span id="edit-att-player-name" class="font-bold"></span></p>
+                    <p class="text-sm text-gray-700">วันที่: <span id="edit-att-date-label" class="font-mono font-bold text-indigo-600"></span></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">ปรับสถานะใหม่</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <label class="border p-2 rounded-xl flex flex-col items-center justify-center cursor-pointer font-bold text-xs">
+                            <input type="radio" name="edit-att-status" value="✓" class="mb-1"> <span class="text-green-600">มา</span>
+                        </label>
+                        <label class="border p-2 rounded-xl flex flex-col items-center justify-center cursor-pointer font-bold text-xs">
+                            <input type="radio" name="edit-att-status" value="✕" class="mb-1"> <span class="text-red-600">ขาด</span>
+                        </label>
+                        <label class="border p-2 rounded-xl flex flex-col items-center justify-center cursor-pointer font-bold text-xs">
+                            <input type="radio" name="edit-att-status" value="ลา" class="mb-1"> <span class="text-amber-600">ลา</span>
+                        </label>
+                        <label class="border p-2 rounded-xl flex flex-col items-center justify-center cursor-pointer font-bold text-xs">
+                            <input type="radio" name="edit-att-status" value="วันหยุด" class="mb-1"> <span class="text-slate-600">วันหยุด</span>
+                        </label>
                     </div>
                 </div>
-            </section>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุเหตุผล</label>
+                    <input type="text" id="edit-att-note" class="w-full p-2 border rounded-xl text-sm">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeAttendanceEditModal()" class="w-1/2 py-2 bg-gray-100 rounded-xl">ยกเลิก</button>
+                    <button type="submit" class="w-1/2 py-2 bg-green-600 text-white font-bold rounded-xl shadow-md">บันทึกการแก้ไขเข้าคลาวด์</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-            <section id="tab-report" class="space-y-6 hidden">
-                <div class="bg-white rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div id="edit-profile-modal" class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden no-print">
+        <div class="bg-white p-6 rounded-2xl max-w-md w-full shadow-2xl">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-lg font-bold text-gray-900"><i class="fa-solid fa-user-pen text-amber-500"></i> แก้ไขข้อมูลโปรไฟล์นักกีฬา</h3>
+                <button onclick="closeProfileEditModal()" class="text-gray-400 text-2xl font-bold hover:text-gray-600">×</button>
+            </div>
+            <form id="edit-profile-form" onsubmit="savePlayerProfile(event)" class="space-y-4">
+                <input type="hidden" id="edit-profile-pid">
+                
+                <div class="flex flex-col items-center justify-center p-2 border bg-gray-50 rounded-xl">
+                    <div class="w-20 h-20 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center mb-2 border relative">
+                        <img id="edit-profile-preview" src="" class="w-full h-full object-cover hidden">
+                        <i id="edit-profile-icon-placeholder" class="fa-solid fa-user text-2xl text-gray-400"></i>
+                    </div>
+                    <label class="bg-white border px-2 py-1 rounded text-xs font-semibold cursor-pointer shadow-sm">
+                        <i class="fa-solid fa-camera"></i> เปลี่ยนรูปถ่าย
+                        <input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden" onchange="previewEditProfileImage(event)">
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
+                    <input type="text" id="edit-profile-fullname" required class="w-full p-2 border rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <h2 class="text-base font-bold text-gray-800">พิมพ์และออกรายงานสถานะนักกีฬา</h2>
-                        <p class="text-xs text-gray-400">กรองรายชื่อตามวันที่เพื่อจัดพิมพ์รายงานส่งทีมผู้บริหาร</p>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อเล่น</label>
+                        <input type="text" id="edit-profile-nickname" required class="w-full p-2 border rounded-lg text-sm">
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-xl transition font-medium shadow flex items-center space-x-1">
-                            <i class="fa-solid fa-file-excel"></i> <span>ดาวน์โหลด Excel</span>
-                        </button>
-                        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl transition font-medium shadow flex items-center space-x-1">
-                            <i class="fa-solid fa-print"></i> <span>พิมพ์รายงาน</span>
-                        </button>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">หมายเลขเสื้อ (No.)</label>
+                        <input type="number" id="edit-profile-number" class="w-full p-2 border rounded-lg text-sm">
                     </div>
                 </div>
-
-                <div id="print-report-area" class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 min-h-[500px]">
-                    <div class="text-center border-b pb-4 mb-6">
-                        <h1 class="text-xl font-bold text-gray-800">รายงานสรุปผลการเข้าฝึกซ้อมสโมสรบาสเกตบอล</h1>
-                        <p class="text-sm text-gray-500 mt-1">ประจำวันที่ <span id="report-date-string" class="font-bold text-gray-700">-</span></p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">รุ่นอายุ (U)</label>
+                        <select id="edit-profile-u" class="w-full p-2 border rounded-lg text-sm">
+                            <option value="12">U12</option><option value="13">U13</option><option value="14">U14</option>
+                            <option value="15">U15</option><option value="16">U16</option><option value="17">U17</option>
+                            <option value="18">U18</option><option value="New">นักกีฬาใหม่</option>
+                        </select>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-4 mb-6 text-center text-xs">
-                        <div class="bg-slate-50 p-3 rounded-xl"><span class="text-gray-400 block">นักกีฬาลงทะเบียนทั้งหมด</span><b class="text-lg text-gray-700" id="rep-stat-total">0</b></div>
-                        <div class="bg-green-50 p-3 rounded-xl"><span class="text-green-600 block">เช็คชื่อเข้าซ้อม (คน)</span><b class="text-lg text-green-600" id="rep-stat-present">0</b></div>
-                        <div class="bg-red-50 p-3 rounded-xl"><span class="text-red-600 block">ขาดการฝึกซ้อม (คน)</span><b class="text-lg text-red-600" id="rep-stat-absent">0</b></div>
-                    </div>
-
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 text-gray-700 uppercase font-bold border-b border-gray-200">
-                                <th class="py-3 px-3 text-center w-16">เบอร์</th>
-                                <th class="py-3 px-3">ชื่อ-นามสกุลนักกีฬา</th>
-                                <th class="py-3 px-3 text-center w-24">รุ่นอายุ</th>
-                                <th class="py-3 px-3 text-center w-32">สถานะเข้าซ้อม</th>
-                                <th class="py-3 px-3">หมายเหตุ</th>
-                            </tr>
-                        </thead>
-                        <tbody id="report-table-body" class="divide-y divide-gray-100">
-                            </tbody>
-                    </table>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <div id="add-player-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center hidden">
-        <form onsubmit="saveNewPlayer(event)" class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl m-4 animate-scale-up">
-            <div class="flex justify-between items-center border-b pb-3 mb-4">
-                <h3 class="font-bold text-gray-800 text-lg">เพิ่มข้อมูลนักกีฬาใหม่</h3>
-                <button type="button" onclick="closeAddPlayerModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            
-            <div class="space-y-4 text-sm">
-                <div class="flex justify-center mb-2">
-                    <div class="relative w-24 h-24 bg-gray-100 rounded-full overflow-hidden border-2 border-gray-200 flex items-center justify-center cursor-pointer group" onclick="document.getElementById('add-profile-upload').click()">
-                        <img id="add-profile-preview" src="" class="w-full h-full object-cover hidden">
-                        <i id="add-profile-icon" class="fa-solid fa-user-plus text-2xl text-gray-400 group-hover:scale-110 transition"></i>
-                        <input type="file" id="add-profile-upload" accept="image/*" onchange="previewProfileImage(this, 'add')" class="hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">วันเกิด</label>
+                        <input type="date" id="edit-profile-birth" class="w-full p-2 border rounded-lg text-sm">
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div class="col-span-1">
-                        <label class="block text-gray-500 font-medium mb-1">เบอร์เสื้อ</label>
-                        <input type="text" id="add-player-number" required placeholder="0-99" class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200 text-center font-bold">
-                    </div>
-                    <div class="col-span-2">
-                        <label class="block text-gray-500 font-medium mb-1">รุ่นอายุ (U)</label>
-                        <input type="number" id="add-player-u" required placeholder="เช่น 15, 17" class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                    </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeProfileEditModal()" class="w-1/2 py-2 bg-gray-100 rounded-xl text-sm">ยกเลิก</button>
+                    <button type="submit" class="w-1/2 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-md text-sm">บันทึกข้อมูล</button>
                 </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">ชื่อ-นามสกุลจริง</label>
-                    <input type="text" id="add-player-fullname" required placeholder="ด.ช. / นาย..." class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">ชื่อเล่นนักกีฬา</label>
-                    <input type="text" id="add-player-nickname" required placeholder="ภาษาไทย" class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">วัน/เดือน/ปีเกิด</label>
-                    <input type="date" id="add-player-birth" required class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200 font-medium">
-                </div>
-            </div>
-
-            <div class="flex space-x-2 mt-6">
-                <button type="button" onclick="closeAddPlayerModal()" class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 transition font-medium text-sm">ยกเลิก</button>
-                <button type="submit" class="w-2/3 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 transition font-medium text-sm shadow">บันทึกข้อมูล</button>
-            </div>
-        </form>
-    </div>
-
-    <div id="edit-player-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center hidden">
-        <form onsubmit="savePlayerProfile(event)" class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl m-4">
-            <div class="flex justify-between items-center border-b pb-3 mb-4">
-                <h3 class="font-bold text-gray-800 text-lg">แก้ไขข้อมูลโปรไฟล์นักกีฬา</h3>
-                <button type="button" onclick="closeProfileEditModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            
-            <input type="hidden" id="edit-profile-pid">
-
-            <div class="space-y-4 text-sm">
-                <div class="flex justify-center mb-2">
-                    <div class="relative w-24 h-24 bg-gray-100 rounded-full overflow-hidden border-2 border-gray-200 flex items-center justify-center cursor-pointer group" onclick="document.getElementById('edit-profile-upload').click()">
-                        <img id="edit-profile-preview" src="" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs"><i class="fa-solid fa-camera"></i></div>
-                        <input type="file" id="edit-profile-upload" accept="image/*" onchange="previewProfileImage(this, 'edit')" class="hidden">
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div class="col-span-1">
-                        <label class="block text-gray-500 font-medium mb-1">เบอร์เสื้อ</label>
-                        <input type="text" id="edit-profile-number" required class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200 text-center font-bold">
-                    </div>
-                    <div class="col-span-2">
-                        <label class="block text-gray-500 font-medium mb-1">รุ่นอายุ (U)</label>
-                        <input type="number" id="edit-profile-u" required class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">ชื่อ-นามสกุลจริง</label>
-                    <input type="text" id="edit-profile-fullname" required class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">ชื่อเล่นนักกีฬา</label>
-                    <input type="text" id="edit-profile-nickname" required class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200">
-                </div>
-                <div>
-                    <label class="block text-gray-500 font-medium mb-1">วัน/เดือน/ปีเกิด</label>
-                    <input type="date" id="edit-profile-birth" class="w-full bg-gray-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 border border-gray-200 font-medium">
-                </div>
-            </div>
-
-            <div class="flex space-x-2 mt-6">
-                <button type="button" onclick="closeProfileEditModal()" class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 transition font-medium text-sm">ยกเลิก</button>
-                <button type="submit" class="w-2/3 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 transition font-medium text-sm shadow">บันทึกข้อมูล</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 
     <script>
-        // CONFIGURATION WEB API GOOGLE SPREADSHEET URL
-        const CLOUD_API_URL = "https://script.google.com/macros/s/AKfycbyVn46wT_T3N7N1W_gYyVn9_C1Vn3kY_wG2v3M/exec"; 
+        const CLOUD_API_URL = "https://script.google.com/macros/s/AKfycbwGhcCNLhhrbuBn9d6ld46_6MtU45x29BGuoE40wYxadvcvtUcy0pJxhy0FZXk7M6AT9w/exec";
 
-        // CENTRAL MEMORY CORE APPLICATION DATABASE STATES
         let players = [];
         let attendanceDb = {};
-        let exclusionDb = {};
+        let exclusionDb = {}; 
+        let editingAttendancePlayers = {};
+        let profileCharts = {}; 
+        let cameraStream = null;
+        let myChart = null;
+        let weeklyPieChart = null;
+        let reportPieChart = null;
+        let reportBarChart = null;
 
-        // CHART CONTEXT REFS
-        let chartU = null;
-        let chartTrend = null;
-
-        // APPLICATION INITIAL RUNTIME ENTRY POINT
-        window.addEventListener('DOMContentLoaded', () => {
-            initDateWidget();
-            setupChartsEmpty();
-            // โหลด Cache เก่ามาโชว์ก่อนเพื่อความเร็วระหว่างรอ fetch ล่าสุดจากคลาวด์
-            const cached = localStorage.getItem('ac_basketball_cache');
-            if (cached) {
-                try {
-                    const parsed = JSON.parse(cached);
-                    players = parsed.players || [];
-                    attendanceDb = parsed.attendance || {};
-                    exclusionDb = parsed.exclusion || {};
-                    refreshAllViews();
-                } catch(e) { console.error("Cache parsing crashed."); }
-            }
-            fetchDataFromCloud();
+        document.addEventListener("DOMContentLoaded", function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('currentAttendanceDate').value = today;
+            document.getElementById('currentAttendanceDateMobile').value = today;
+            syncDataFromCloud(); // เรียกดึงข้อมูลความเร็วสูงผ่านระบบจัดการ Cache และคลาวด์เบื้องหลัง
         });
 
-        function showLoading(msg = "กำลังประมวลผล...") {
-            document.getElementById('loading-text').innerText = msg;
-            document.getElementById('loading-overlay').classList.remove('hidden');
+        function showLoading(text) {
+            document.getElementById('loading-text').innerText = text;
+            document.getElementById('loading-screen').classList.remove('hidden');
         }
+
         function hideLoading() {
-            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('loading-screen').classList.add('hidden');
         }
 
-        function initDateWidget() {
-            const today = new Date().toISOString().split('T')[0];
-            const dateInput = document.getElementById('attendance-date');
-            dateInput.value = today;
-            dateInput.max = today;
-            onDateChanged();
-        }
-
-        function getSelectedDate() {
-            return document.getElementById('attendance-date').value;
-        }
-
-        function onDateChanged() {
-            const d = getSelectedDate();
-            document.getElementById('report-date-string').innerText = new Date(d).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
-            refreshAllViews();
-        }
-
-        // TABS NAVIGATION CONTROLLER
-        function switchTab(target) {
-            const tabs = ['dashboard', 'attendance', 'players', 'qr', 'report'];
-            tabs.forEach(t => {
-                document.getElementById(`tab-${t}`).classList.add('hidden');
-                document.getElementById(`btn-tab-${t}`).className = "w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium text-gray-600 hover:bg-gray-50";
-            });
-            document.getElementById(`tab-${target}`).classList.remove('hidden');
-            document.getElementById(`btn-tab-${target}`).className = "w-full text-left px-4 py-3 rounded-xl flex items-center space-x-3 transition font-medium bg-red-50 text-red-600";
-            
-            const dateWidget = document.getElementById('date-picker-widget');
-            if(target === 'attendance' || target === 'report') { dateWidget.classList.remove('hidden'); }
-            else { dateWidget.classList.add('hidden'); }
-            
-            if(target !== 'qr') stopCameraScanner();
-            refreshAllViews();
-        }
-
-        // RETRIEVE DATABASE VALUES FROM GOOGLE CLOUD STORAGE
-        function fetchDataFromCloud() {
-            showLoading("กำลังซิงค์และเชื่อมโยงฐานข้อมูลจากกูเกิลคลาวด์...");
-            fetch(`${CLOUD_API_URL}?action=getAll`)
-            .then(res => res.json())
-            .then(data => {
+        function syncDataFromCloud(forceRefresh = false) {
+            // 1. ดึงข้อมูลจากความจำเครื่อง (Cache) มาแสดงผลทันที ไม่ต้องรอหน้าจอหมุนโหลดค้าง
+            const cachedData = localStorage.getItem('ac_basketball_cache');
+            if (cachedData && !forceRefresh) {
+                const data = JSON.parse(cachedData);
                 players = data.players || [];
                 attendanceDb = data.attendance || {};
                 exclusionDb = data.exclusion || {};
-                
-                // บันทึกลง Cache เก็บไว้ใช้งาน offline
-                localStorage.setItem('ac_basketball_cache', JSON.stringify(data));
-                
-                hideLoading();
                 refreshAllViews();
-            })
-            .catch(err => {
-                console.error("Cloud syncing error:", err);
-                hideLoading();
-                // ถ้าดึงข้อมูลผิดพลาดแต่มี Cache อยู่แล้ว ให้เปิดใช้งานปกติไปก่อน
-                if(players.length > 0) {
-                    alert("⚠️ เชื่อมต่อคลาวด์ไม่สำเร็จขณะนี้! กำลังรันระบบบนฐานข้อมูลออฟไลน์ภายในเครื่อง");
-                } else {
-                    alert("❌ ล้มเหลวในการซิงค์ฐานข้อมูลเริ่มต้น กรุณาตรวจสอบอินเทอร์เน็ตหรือ URL เว็บแอป");
-                }
-            });
+                if(!myChart) { initChart(); initWeeklyPieChart(); } else { updateChartData(); updateWeeklyPieChart(); }
+            } else {
+                showLoading("กำลังเชื่อมต่อฐานข้อมูล Google Sheets ออนไลน์...");
+            }
+
+            // 2. แอบดึงข้อมูลล่าสุดจาก Google Sheets จริงอยู่เบื้องหลัง (Background Fetch)
+            fetch(`${CLOUD_API_URL}?action=getData`)
+                .then(res => res.json())
+                .then(data => {
+                    players = data.players || [];
+                    attendanceDb = data.attendance || {};
+                    exclusionDb = data.exclusion || {};
+                    
+                    // เซฟเก็บข้อมูลชุดล่าสุดไว้ในเครื่องเพื่อความเร็วในรอบหน้า
+                    localStorage.setItem('ac_basketball_cache', JSON.stringify(data));
+                    
+                    refreshAllViews();
+                    if(!myChart) { initChart(); initWeeklyPieChart(); } else { updateChartData(); updateWeeklyPieChart(); }
+                    hideLoading();
+                })
+                .catch(err => {
+                    console.error("Cloud Sync Error:", err);
+                    if(!cachedData) alert("ไม่สามารถโหลดข้อมูลออนไลน์ได้ กรุณาตรวจสอบสิทธิ์ของ Google Sheets");
+                    hideLoading();
+                });
         }
 
-        // PUSH AND WRITE SYSTEM CONFIG VALUES TO SPREADSHEETS ONLINE
         function pushDataToCloud(silent = false) {
-            if(!silent) showLoading("กำลังส่งข้อมูลไปบันทึกบน Google Sheets...");
-            const payload = {
-                action: "saveAll",
-                players: players,
-                attendance: attendanceDb,
-                exclusion: exclusionDb
-            };
+    if(!silent) showLoading("กำลังส่งข้อมูลไปบันทึกบน Google Sheets...");
+    const payload = {
+        action: "saveAll",
+        players: players,
+        attendance: attendanceDb,
+        exclusion: exclusionDb
+    };
 
-            // อัปเดต Cache ในเครื่องไว้ก่อนทันทีเพื่อความรวดเร็วและไม่ให้ข้อมูลสูญหาย
-            const currentData = { players, attendance: attendanceDb, exclusion: exclusionDb };
-            localStorage.setItem('ac_basketball_cache', JSON.stringify(currentData));
+    // อัปเดต Cache ในเครื่องไว้ก่อนทันทีเพื่อความรวดเร็วและไม่ให้ข้อมูลสูญหาย
+    const currentData = { players, attendance: attendanceDb, exclusion: exclusionDb };
+    localStorage.setItem('ac_basketball_cache', JSON.stringify(currentData));
 
-            fetch(CLOUD_API_URL, {
-                method: "POST",
-                mode: "no-cors", // ปลดล็อกปัญหา CORS Redirect ของ Google Script
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(res => {
-                // ในโหมด no-cors การส่งผ่านแบบสำเร็จไม่แจ้งเออร์เรอร์จะถือว่าข้อมูลผ่านไปยังเว็บแอปแล้ว
-                hideLoading();
-                if(!silent) alert("ระบบบันทึกและอัปเดตข้อมูลออนไลน์สำเร็จแล้ว!");
-            })
-            .catch(err => {
-                console.error("Cloud Save Error:", err);
-                hideLoading();
-                alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลออนไลน์ (กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต)");
-            });
-        }
+    fetch(CLOUD_API_URL, {
+        method: "POST",
+        mode: "no-cors", // ปลดล็อกปัญหา CORS Redirect ของ Google Script
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => {
+        // ในโหมด no-cors เราจะไม่สามารถอ่าน response body ได้ แต่ถ้าส่งผ่านจะถือว่าสำเร็จ
+        hideLoading();
+        if(!silent) alert("ระบบบันทึกและอัปเดตข้อมูลออนไลน์สำเร็จแล้ว!");
+    })
+    .catch(err => {
+        console.error("Cloud Save Error:", err);
+        hideLoading();
+        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลออนไลน์ (กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต)");
+    });
+}
 
-        // DYNAMIC CENTRALIZED VIEW UPDATES MANAGER
-        function refreshAllViews() {
-            updateGlobalStats();
-            renderAttendanceList();
-            renderPlayersList();
-            renderReportArea();
-            renderBirthdayPanel();
-            updateChartsData();
-        }
+        function handleCSVImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-        function updateGlobalStats() {
-            const activePlayers = players.filter(x => !exclusionDb[x.id]);
-            document.getElementById('stat-total-p').innerText = activePlayers.length;
+    showLoading("กำลังอ่านไฟล์ CSV และเตรียมอัปโหลดข้อมูล...");
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const text = evt.target.result;
+        const lines = text.split(/\r?\n/);
+        let addedCount = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
             
-            const date = getSelectedDate();
-            let todayP = 0;
-            activePlayers.forEach(p => {
-                if(attendanceDb[date]?.[p.id]?.status === '✓') todayP++;
-            });
-            document.getElementById('stat-present-p').innerText = todayP;
+            const columns = lines[i].split(',');
+
+            // ข้ามแถวหัวตารางหากตรวจพบข้อความหัวข้อ
+            if (i === 0 && (columns[0].includes("เบอร์") || columns[0].toLowerCase().includes("no") || columns[1].includes("ชื่อ"))) {
+                continue;
+            }
+
+            // รองรับรูปแบบไฟล์ของคุณ: 23,ด.ช. ปุญญพัฒน์,อั่งเปา,15,2011-10-18
+            if (columns.length >= 3) {
+                const jerseyNo = columns[0] ? columns[0].replace(/["']/g, "").trim() : "";       // คอลัมน์ 1: เบอร์เสื้อ (23)
+                const fullName = columns[1] ? columns[1].replace(/["']/g, "").trim() : "";       // คอลัมน์ 2: ชื่อ-นามสกุล (ด.ช. ปุญญพัฒน์)
+                const nickname = columns[2] ? columns[2].replace(/["']/g, "").trim() : "";       // คอลัมน์ 3: ชื่อเล่น (อั่งเปา)
+                const uGroup   = columns[3] ? columns[3].trim().replace(/[uU]/g, "") : "New";    // คอลัมน์ 4: รุ่นอายุ (15)
+                const birthDate = columns[4] ? columns[4].trim() : "";                           // คอลัมน์ 5: วันเกิด (2011-10-18)
+
+                players.push({
+                    id: "P_" + (Date.now() + Math.floor(Math.random() * 1000)) + "_" + i,
+                    name: fullName,
+                    nickname: nickname,
+                    no: jerseyNo,
+                    u: uGroup,
+                    birth: birthDate,
+                    avatar: ""
+                });
+                addedCount++;
+            }
         }
 
-        // RENDER METHOD 1: ATTENDANCE CARDS CHECK-IN LIST
-        function renderAttendanceList() {
-            const container = document.getElementById('attendance-list-container');
-            container.innerHTML = "";
-            const date = getSelectedDate();
-            const activePlayers = players.filter(x => !exclusionDb[x.id]);
+        if (addedCount > 0) {
+            showLoading(`กำลังบันทึกนักกีฬาใหม่ ${addedCount} คน ขึ้นกูเกิลชีต...`);
+            pushDataToCloud(true);
+            document.getElementById('csv-file-input').value = "";
+            alert(`นำเข้าสำเร็จ! เพิ่มนักกีฬาใหม่ทั้งหมด ${addedCount} คน เข้าสู่ฐานข้อมูลคลาวด์เรียบร้อยครับ`);
+            // อัปเดตรีเฟรชหน้าจอหลังจากนำเข้าข้อมูลเสร็จ
+            refreshAllViews();
+        } else {
+            hideLoading();
+            alert("ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV กรุณาตรวจสอบความถูกต้องอีกครั้ง");
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+}
 
-            if(activePlayers.length === 0) {
-                container.innerHTML = "<div class='bg-white rounded-xl p-8 text-center text-gray-400 text-sm'>ยังไม่มีฐานข้อมูลรายชื่อนักกีฬา กรุณาไปเพิ่มที่เมนูฐานข้อมูลนักกีฬา</div>";
+        function refreshAllViews() {
+            updateDashboardStats();
+            loadAttendanceSheet();
+            loadPlayersTable();
+            renderProfilesContainer();
+            updateReportDropdown();
+            if(weeklyPieChart) updateWeeklyPieChart();
+        }
+
+        function changeAttendanceDate(val) {
+            document.getElementById('currentAttendanceDate').value = val;
+            document.getElementById('currentAttendanceDateMobile').value = val;
+            editingAttendancePlayers = {};
+            refreshAllViews();
+            if(myChart) updateChartData();
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('theme-bg-red', 'text-white');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+            });
+            document.getElementById(`btn-${tabName}`).classList.add('theme-bg-red', 'text-white');
+            stopCameraStream();
+            if(tabName === 'profiles') { renderProfilesCharts(); }
+        }
+
+        function getSelectedDate() { return document.getElementById('currentAttendanceDate').value; }
+
+        function getWorkingDaysOfSelectedWeek() {
+            const current = new Date(getSelectedDate());
+            const dayOfWeek = current.getDay(); 
+            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; 
+            
+            const monday = new Date(current);
+            monday.setDate(current.getDate() + distanceToMonday);
+
+            let workingDays = [];
+            for (let i = 0; i < 5; i++) { 
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                workingDays.push(d.toISOString().split('T')[0]);
+            }
+            return workingDays;
+        }
+
+        function getPlayerWeeklyStats(pid, workingDays) {
+            let m=0, k=0, l=0, h=0;
+            let dailyStatuses = []; 
+
+            workingDays.forEach(dateStr => {
+                const dayRecords = attendanceDb[dateStr] || {};
+                const status = dayRecords[pid]?.status || 'ยังไม่ได้เช็ค';
+                dailyStatuses.push(status);
+
+                if(status === '✓') m++;
+                else if(status === '✕') k++;
+                else if(status === 'ลา') l++;
+                else if(status === 'วันหยุด') h++;
+            });
+
+            return { m, k, l, h, dailyStatuses };
+        }
+
+        function loadAttendanceSheet() {
+            const tbody = document.getElementById('attendance-table-body');
+            if(!tbody) return; tbody.innerHTML = '';
+            const filterU = document.getElementById('filter-u-attendance').value;
+            const date = getSelectedDate();
+            const dayRecords = attendanceDb[date] || {};
+            
+            let sortedPlayers = players.filter(p => (filterU === 'ALL' || p.u === filterU) && !exclusionDb[p.id]);
+            
+            if(sortedPlayers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-400">ไม่พบข้อมูลรายชื่อ (หรือนักกีฬาในกลุ่มนี้ไม่มีสถานะคัดเลือก)</td></tr>`;
                 return;
             }
 
-            // เรียงตามเบอร์เสื้อจากน้อยไปมาก
-            activePlayers.sort((a,b) => parseInt(a.no||0) - parseInt(b.no||0));
-
-            activePlayers.forEach(p => {
-                const currentStatus = attendanceDb[date]?.[p.id]?.status || '-';
-                const currentNote = attendanceDb[date]?.[p.id]?.note || '';
+            sortedPlayers.forEach(p => {
+                const rec = dayRecords[p.id] || { status: 'ยังไม่ได้เช็ค', note: '' };
+                const currentStatus = editingAttendancePlayers[p.id] !== undefined ? editingAttendancePlayers[p.id] : rec.status;
+                const avatarHTML = p.avatar ? `<img src="${p.avatar}" class="w-10 h-10 rounded-full object-cover mx-auto">` : `<div class="w-10 h-10 rounded-full bg-gray-200 mx-auto flex items-center justify-center text-gray-400 text-xs"><i class="fa-solid fa-user"></i></div>`;
                 
-                const card = document.createElement('div');
-                card.className = `bg-white rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 transition-all ${
-                    currentStatus === '✓' ? 'border-green-500 bg-green-50 bg-opacity-20' : currentStatus === '✕' ? 'border-red-500 bg-red-50 bg-opacity-20' : 'border-gray-200'
-                }`;
-
-                const imgHtml = p.avatar ? `<img src="${p.avatar}" class="w-12 h-12 rounded-full object-cover border">` : `<div class="w-12 h-12 rounded-full theme-bg-dark flex items-center justify-center text-white font-bold text-sm border"><span class="uppercase">${p.nickname.substring(0,2)}</span></div>`;
-
-                card.innerHTML = `
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 font-black text-slate-700 text-base text-center bg-gray-100 rounded-lg p-1">#${p.no}</div>
-                        ${imgHtml}
-                        <div>
-                            <h4 class="font-bold text-gray-800">${p.name} (${p.nickname})</h4>
-                            <span class="text-xs bg-slate-100 px-2 py-0.5 rounded text-gray-500 font-medium">รุ่น U${p.u}</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-3 justify-end">
-                        <input type="text" placeholder="บันทึกหมายเหตุ..." value="${currentNote}" onchange="updatePlayerNote('${p.id}', this.value)" class="bg-gray-50 border border-gray-100 rounded-xl px-3 py-1.5 text-xs focus:outline-none w-36 sm:w-44 focus:ring-1 focus:ring-red-500">
-                        <div class="flex rounded-xl bg-gray-100 p-0.5 shadow-inner">
-                            <button onclick="markAttendance('${p.id}', '✓')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${currentStatus === '✓' ? 'bg-green-500 text-white shadow' : 'text-gray-400 hover:text-gray-600'}"><i class="fa-solid fa-check"></i> <span class="hidden sm:inline">มาซ้อม</span></button>
-                            <button onclick="markAttendance('${p.id}', '✕')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${currentStatus === '✕' ? 'bg-red-500 text-white shadow' : 'text-gray-400 hover:text-gray-600'}"><i class="fa-solid fa-xmark"></i> <span class="hidden sm:inline">ขาดซ้อม</span></button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 text-sm align-middle">
+                        <td class="p-3 pl-4 font-mono">${p.no || '-'}</td>
+                        <td class="p-2 text-center">${avatarHTML}</td>
+                        <td class="p-3"><strong>${p.name}</strong> (${p.nickname})</td>
+                        <td class="p-3"><span class="bg-gray-100 px-2 py-0.5 rounded text-xs">U${p.u}</span></td>
+                        <td class="p-3 text-center">
+                            <div class="flex justify-center space-x-1">
+                                <button onclick="setPlayerAttendanceStatus('${p.id}', '✓')" class="w-14 py-1.5 rounded-lg text-xs font-bold border ${currentStatus==='✓'?'bg-green-600 text-white':'bg-white text-green-600 border-green-200'}">มา</button>
+                                <button onclick="setPlayerAttendanceStatus('${p.id}', '✕')" class="w-14 py-1.5 rounded-lg text-xs font-bold border ${currentStatus==='✕'?'bg-red-600 text-white':'bg-white text-red-600 border-red-200'}">ขาด</button>
+                                <button onclick="setPlayerAttendanceStatus('${p.id}', 'ลา')" class="w-14 py-1.5 rounded-lg text-xs font-bold border ${currentStatus==='ลา'?'bg-amber-500 text-white':'bg-white text-amber-600 border-amber-200'}">ลา</button>
+                                <button onclick="setPlayerAttendanceStatus('${p.id}', 'วันหยุด')" class="w-16 py-1.5 rounded-lg text-xs font-bold border ${currentStatus==='วันหยุด'?'bg-slate-500 text-white':'bg-white text-slate-600 border-slate-200'}">หยุด</button>
+                                <button onclick="openAttendanceEditModal('${p.id}')" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200"><i class="fa-solid fa-pen-to-square"></i></button>
+                            </div>
+                        </td>
+                        <td class="p-3"><input type="text" id="note-${p.id}" value="${rec.note || ''}" class="w-full p-2 border rounded-lg text-xs"></td>
+                    </tr>`;
             });
         }
 
-        function markAttendance(pid, status) {
+        function setPlayerAttendanceStatus(pid, status) {
+            editingAttendancePlayers[pid] = status;
             const date = getSelectedDate();
             if(!attendanceDb[date]) attendanceDb[date] = {};
-            if(!attendanceDb[date][pid]) attendanceDb[date][pid] = { status: '-', note: '' };
-            
-            attendanceDb[date][pid].status = status;
-            pushDataToCloud(true);
+            const noteInput = document.getElementById(`note-${pid}`);
+            attendanceDb[date][pid] = { status: status, note: noteInput ? noteInput.value : '' };
+            loadAttendanceSheet();
+        }
+
+        function openAttendanceEditModal(pid) {
+            const p = players.find(x => x.id === pid); if(!p) return;
+            const date = getSelectedDate();
+            const rec = (attendanceDb[date] && attendanceDb[date][p.id]) ? attendanceDb[date][p.id] : { status: '', note: '' };
+            document.getElementById('edit-att-pid').value = p.id;
+            document.getElementById('edit-att-player-name').innerText = p.name;
+            document.getElementById('edit-att-date-label').innerText = date;
+            document.getElementById('edit-att-note').value = rec.note || '';
+            document.getElementsByName('edit-att-status').forEach(r => { r.checked = r.value === rec.status; });
+            document.getElementById('edit-attendance-modal').classList.remove('hidden');
+        }
+
+        function closeAttendanceEditModal() { document.getElementById('edit-attendance-modal').classList.add('hidden'); }
+
+        function saveEditedAttendance(e) {
+            e.preventDefault();
+            const pid = document.getElementById('edit-att-pid').value;
+            const date = getSelectedDate();
+            let status = 'ยังไม่ได้เช็ค';
+            document.getElementsByName('edit-att-status').forEach(r => { if(r.checked) status = r.value; });
+            if(!attendanceDb[date]) attendanceDb[date] = {};
+            attendanceDb[date][pid] = { status: status, note: document.getElementById('edit-att-note').value };
+            closeAttendanceEditModal();
+            pushDataToCloud();
+            // รีเฟรชข้อมูลที่จำเป็นหลังอัปเดตค่าออนไลน์
             refreshAllViews();
         }
 
-        function updatePlayerNote(pid, note) {
-            const date = getSelectedDate();
-            if(!attendanceDb[date]) attendanceDb[date] = {};
-            if(!attendanceDb[date][pid]) attendanceDb[date][pid] = { status: '-', note: '' };
-            
-            attendanceDb[date][pid].note = note;
-            pushDataToCloud(true);
-        }
-
-        function setAllAttendance(status) {
+        function submitAttendanceSheet() {
             const date = getSelectedDate();
             if(!attendanceDb[date]) attendanceDb[date] = {};
             players.forEach(p => {
-                if(!exclusionDb[p.id]) {
-                    if(!attendanceDb[date][p.id]) attendanceDb[date][p.id] = { status: '-', note: '' };
-                    attendanceDb[date][p.id].status = status;
+                const noteInput = document.getElementById(`note-${p.id}`);
+                if(noteInput) {
+                    const status = attendanceDb[date][p.id]?.status || 'ยังไม่ได้เช็ค';
+                    attendanceDb[date][p.id] = { status: status, note: noteInput.value };
                 }
             });
-            pushDataToCloud(true);
+            pushDataToCloud();
             refreshAllViews();
         }
 
-        // RENDER METHOD 2: PLAYER DATA CORE MANAGEMENTS TABLE
-        function renderPlayersList() {
-            const tbody = document.getElementById('players-table-body');
-            tbody.innerHTML = "";
-            const search = document.getElementById('search-player-input').value.toLowerCase().trim();
-            const activePlayers = players.filter(x => !exclusionDb[x.id]);
+        function markAllPresent() {
+            const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
+            players.forEach(p => { if(!exclusionDb[p.id]) attendanceDb[date][p.id] = { status: '✓', note: '' }; });
+            loadAttendanceSheet();
+        }
 
-            const filtered = activePlayers.filter(p => 
-                p.name.toLowerCase().includes(search) || 
-                p.nickname.toLowerCase().includes(search) || 
-                p.no.toString().includes(search)
-            );
+        function updateDashboardStats() {
+            const date = getSelectedDate();
+            let present = 0; let absent = 0;
+            const dayRecords = attendanceDb[date] || {};
+            let notesHTML = "";
 
-            if(filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-gray-400">ไม่พบรายชื่อข้อมูลนักกีฬาที่ต้องการค้นหา</td></tr>`;
+            let activePlayersCount = players.filter(p => !exclusionDb[p.id]).length;
+
+            players.forEach(p => {
+                if (exclusionDb[p.id]) return; 
+                const rec = dayRecords[p.id];
+                if(rec) {
+                    if(rec.status === '✓') present++;
+                    else if(rec.status === '✕') absent++;
+                    if(rec.note) {
+                        notesHTML += `<div class="bg-gray-50 p-2 border rounded-lg text-xs"><strong>${p.name}:</strong> ${rec.note} (${rec.status})</div>`;
+                    }
+                }
+            });
+
+            document.getElementById('stat-total-players').innerText = activePlayersCount;
+            document.getElementById('stat-present').innerText = present;
+            document.getElementById('stat-absent').innerText = absent;
+            document.getElementById('stat-rate').innerText = activePlayersCount ? Math.round((present/activePlayersCount)*100)+"%" : "0%";
+            document.getElementById('leave-notes-list').innerHTML = notesHTML || "<p class='text-xs text-gray-400 italic'>ไม่มีหมายเหตุ</p>";
+        }
+
+        function addPlayer(e) {
+            e.preventDefault();
+            const avatar = document.getElementById('player-avatar-preview').src;
+            players.push({
+                id: "P_" + Date.now(),
+                name: document.getElementById('p-fullname').value,
+                nickname: document.getElementById('p-nickname').value,
+                no: document.getElementById('p-number').value,
+                u: document.getElementById('p-u').value,
+                birth: document.getElementById('p-birth').value,
+                avatar: avatar.startsWith('data:') ? avatar : ""
+            });
+            pushDataToCloud();
+            document.getElementById('add-player-form').reset();
+            document.getElementById('player-avatar-preview').classList.add('hidden');
+            document.getElementById('avatar-placeholder-icon').classList.remove('hidden');
+            refreshAllViews();
+        }
+
+        function previewPlayerImage(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const r = new FileReader(); r.onload = function(evt){
+                document.getElementById('player-avatar-preview').src = evt.target.result;
+                document.getElementById('player-avatar-preview').classList.remove('hidden');
+                document.getElementById('avatar-placeholder-icon').classList.add('hidden');
+            }; r.readAsDataURL(file);
+        }
+
+        function loadPlayersTable() {
+            const tbody = document.getElementById('players-list-table-body'); if(!tbody) return; tbody.innerHTML = '';
+            document.getElementById('player-count').innerText = players.length + " คน";
+            players.forEach(p => {
+                let statusBadge = "";
+                if(exclusionDb[p.id] === 'fail') statusBadge = " <span class='text-amber-500 font-bold'>(ไม่ผ่าน)</span>";
+                if(exclusionDb[p.id] === 'resign') statusBadge = " <span class='text-red-500 font-bold'>(ลาออก)</span>";
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 text-xs">
+                        <td class="p-2 pl-4 font-mono">${p.no || '-'}</td>
+                        <td class="p-1 text-center">${p.avatar?`<img src="${p.avatar}" class="w-8 h-8 rounded-full object-cover mx-auto">`:'-'}</td>
+                        <td class="p-2"><strong>${p.name}</strong> (${p.nickname})${statusBadge}</td>
+                        <td class="p-2">U${p.u}</td>
+                        <td class="p-2 text-center"><button onclick="deletePlayer('${p.id}')" class="text-red-500 font-bold"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function deletePlayer(id) {
+            if(!confirm("ลบนักกีฬาคนนี้ออกจากระบบคลาวด์ถาวร?")) return;
+            players = players.filter(x => x.id !== id);
+            delete exclusionDb[id];
+            pushDataToCloud();
+            refreshAllViews();
+        }
+
+        function renderProfilesContainer() {
+            const container = document.getElementById('profiles-grid-container'); if(!container) return; container.innerHTML = '';
+            
+            if(players.length === 0) {
+                container.innerHTML = `<div class="col-span-full p-12 text-center text-gray-400">ยังไม่มีข้อมูลนักกีฬาในระบบคลาวด์</div>`;
                 return;
             }
 
-            filtered.sort((a,b) => parseInt(a.no||0) - parseInt(b.no||0));
+            const workingDays = getWorkingDaysOfSelectedWeek();
 
-            filtered.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition";
-                const imgHtml = p.avatar ? `<img src="${p.avatar}" class="w-10 h-10 rounded-full object-cover border">` : `<div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-xs border"><i class="fa-solid fa-user"></i></div>`;
+            players.forEach(p => {
+                let overlayHTML = "";
+                if (exclusionDb[p.id] === 'fail') {
+                    overlayHTML = `<div class="status-overlay text-amber-400">ไม่ผ่าน</div>`;
+                } else if (exclusionDb[p.id] === 'resign') {
+                    overlayHTML = `<div class="status-overlay text-red-500">ลาออก</div>`;
+                }
 
-                tr.innerHTML = `
-                    <td class="py-3 px-4 text-center font-bold text-slate-700">#${p.no}</td>
-                    <td class="py-3 px-4">${imgHtml}</td>
-                    <td class="py-3 px-4">
-                        <div class="font-bold text-gray-800">${p.name}</div>
-                        <div class="text-xs text-gray-400">ชื่อเล่น: ${p.nickname} ${p.birth?' | วันเกิด: '+p.birth:''}</div>
-                    </td>
-                    <td class="py-3 px-4 text-center"><span class="bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded text-xs">U${p.u}</span></td>
-                    <td class="py-3 px-4 text-center space-x-1">
-                        <button onclick="openProfileEditModal('${p.id}')" class="bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs px-2.5 py-1.5 rounded-lg transition font-semibold"><i class="fa-solid fa-user-gear"></i> แก้ไข</button>
-                        <button onclick="deletePlayerRow('${p.id}')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2.5 py-1.5 rounded-lg transition font-semibold"><i class="fa-solid fa-trash"></i> ลบ</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
+                // [แก้ไขจุดที่ 2] ตัดเวลาของ Date ISO Object ออกอย่างสมบูรณ์แบบไม่ให้เหลือเศษเวลา
+                const cleanBirth = p.birth ? String(p.birth).split('T')[0] : 'ไม่ระบุ';
+                const stats = getPlayerWeeklyStats(p.id, workingDays);
+                const totalChecked = stats.m + stats.k + stats.l + stats.h;
+
+                container.innerHTML += `
+                    <div class="bg-white rounded-2xl border shadow-sm p-4 flex flex-col space-y-4 justify-between">
+                        <div>
+                            <div class="flex items-center space-x-4 mb-3">
+                                <div class="profile-image-container w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0 border shadow-inner">
+                                    ${overlayHTML}
+                                    ${p.avatar ? `<img src="${p.avatar}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-user text-xl"></i></div>`}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-gray-800 text-sm truncate">No.${p.no || '-'} ${p.name}</h4>
+                                    <p class="text-xs text-gray-600 font-medium">ชื่อเล่น: ${p.nickname} | รุ่น: U${p.u}</p>
+                                    <p class="text-[11px] text-gray-400">วันเกิด: ${cleanBirth}</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-xl p-2 border border-gray-100">
+                                <p class="text-[11px] font-bold text-center text-gray-500 mb-1">สถิติสัปดาห์นี้ (จ-ศ)</p>
+                                <div class="relative h-28 w-full flex items-center justify-center">
+                                    ${totalChecked === 0 ? 
+                                        `<p class="text-xs text-gray-400 italic">ไม่มีบันทึกข้อมูลสัปดาห์นี้</p>` : 
+                                        `<canvas id="profile-chart-${p.id}"></canvas>`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 gap-1.5 pt-2 border-t">
+                            <button onclick="openProfileEditModal('${p.id}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-user-pen text-xs"></i> <span>Edit โปรไฟล์</span>
+                            </button>
+                            <button onclick="markPlayerAsExcluded('${p.id}', 'fail')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-user-xmark text-xs"></i> <span>ไม่ผ่านคัดตัว</span>
+                            </button>
+                            <button onclick="markPlayerAsExcluded('${p.id}', 'resign')" class="bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 px-1 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1">
+                                <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i> <span>ลาออก</span>
+                            </button>
+                        </div>
+                    </div>`;
             });
         }
 
-        // CSV DATABASE PARSING LOADER
-        function handleCSVImport(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+        function renderProfilesCharts() {
+            const workingDays = getWorkingDaysOfSelectedWeek();
+            players.forEach(p => {
+                const canvas = document.getElementById(`profile-chart-${p.id}`);
+                if (!canvas) return;
 
-            showLoading("กำลังอ่านไฟล์ CSV และเตรียมอัปโหลดข้อมูล...");
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const text = evt.target.result;
-                const lines = text.split(/\r?\n/);
-                let addedCount = 0;
+                if (profileCharts[p.id]) { profileCharts[p.id].destroy(); }
 
-                for (let i = 0; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    
-                    const columns = lines[i].split(',');
+                const stats = getPlayerWeeklyStats(p.id, workingDays);
 
-                    // ข้ามแถวหัวตารางหากตรวจพบข้อความหัวข้อ
-                    if (i === 0 && (columns[0].includes("เบอร์") || columns[0].toLowerCase().includes("no") || columns[1].includes("ชื่อ"))) {
-                        continue;
+                profileCharts[p.id] = new Chart(canvas, {
+                    type: 'pie',
+                    data: {
+                        labels: ['มา', 'ขาด', 'ลา', 'หยุด'],
+                        datasets: [{
+                            data: [stats.m, stats.k, stats.l, stats.h],
+                            backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#9CA3AF']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                color: '#fff',
+                                font: { weight: 'bold', size: 10 },
+                                formatter: (value) => value > 0 ? value : ''
+                            }
+                        }
                     }
-
-                    // รองรับรูปแบบไฟล์ของคุณ: 23,ด.ช. ปุญญพัฒน์,อั่งเปา,15,2011-10-18
-                    if (columns.length >= 3) {
-                        const jerseyNo = columns[0] ? columns[0].replace(/["']/g, "").trim() : "";       // คอลัมน์ 1: เบอร์เสื้อ (23)
-                        const fullName = columns[1] ? columns[1].replace(/["']/g, "").trim() : "";       // คอลัมน์ 2: ชื่อ-นามสกุล (ด.ช. ปุญญพัฒน์)
-                        const nickname = columns[2] ? columns[2].replace(/["']/g, "").trim() : "";       // คอลัมน์ 3: ชื่อเล่น (อั่งเปา)
-                        const uGroup   = columns[3] ? columns[3].trim().replace(/[uU]/g, "") : "New";    // คอลัมน์ 4: รุ่นอายุ (15)
-                        const birthDate = columns[4] ? columns[4].trim() : "";                           // คอลัมน์ 5: วันเกิด (2011-10-18)
-
-                        players.push({
-                            id: "P_" + (Date.now() + Math.floor(Math.random() * 1000)) + "_" + i,
-                            name: fullName,
-                            nickname: nickname,
-                            no: jerseyNo,
-                            u: uGroup,
-                            birth: birthDate,
-                            avatar: ""
-                        });
-                        addedCount++;
-                    }
-                }
-
-                if (addedCount > 0) {
-                    showLoading(`กำลังบันทึกนักกีฬาใหม่ ${addedCount} คน ขึ้นกูเกิลชีต...`);
-                    pushDataToCloud(true);
-                    document.getElementById('csv-file-input').value = "";
-                    alert(`นำเข้าสำเร็จ! เพิ่มนักกีฬาใหม่ทั้งหมด ${addedCount} คน เข้าสู่ฐานข้อมูลคลาวด์เรียบร้อยครับ`);
-                    refreshAllViews();
-                } else {
-                    hideLoading();
-                    alert("ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV กรุณาตรวจสอบความถูกต้องอีกครั้ง");
-                }
-            };
-            reader.readAsText(file, "UTF-8");
+                });
+            });
         }
 
-        // PLAYER PROFILE ADD MANAGER MODALS
-        function openAddPlayerModal() {
-            document.getElementById('add-player-modal').classList.remove('hidden');
-        }
-        function closeAddPlayerModal() {
-            document.getElementById('add-player-modal').classList.add('hidden');
-        }
-
-        function previewProfileImage(input, mode) {
-            const file = input.files[0];
-            if(file) {
-                const r = new FileReader();
-                r.onload = function(e) {
-                    if(mode === 'add') {
-                        document.getElementById('add-profile-preview').src = e.target.result;
-                        document.getElementById('add-profile-preview').classList.remove('hidden');
-                        document.getElementById('add-profile-icon').classList.add('hidden');
-                    } else {
-                        document.getElementById('edit-profile-preview').src = e.target.result;
-                    }
-                };
-                r.readAsDataURL(file);
+        function markPlayerAsExcluded(pid, type) {
+            if (exclusionDb[pid] === type) {
+                delete exclusionDb[pid]; 
+                alert("คืนค่าสถานะนักกีฬาเป็นปกติเรียบร้อยแล้ว");
+            } else {
+                exclusionDb[pid] = type; 
+                alert(type === 'fail' ? "บันทึกสถานะ 'ไม่ผ่านคัดตัว' สำเร็จ" : "บันทึกสถานะ 'ลาออก' สำเร็จ");
             }
-        }
-
-        function saveNewPlayer(e) {
-            e.preventDefault();
-            const no = document.getElementById('add-player-number').value.trim();
-            const u = document.getElementById('add-player-u').value.trim();
-            const name = document.getElementById('add-player-fullname').value.trim();
-            const nickname = document.getElementById('add-player-nickname').value.trim();
-            const birth = document.getElementById('add-player-birth').value;
-            const preview = document.getElementById('add-profile-preview');
-
-            let avatar = "";
-            if(!preview.classList.contains('hidden')) avatar = preview.src;
-
-            players.push({
-                id: "P_" + Date.now(), no, u, name, nickname, birth, avatar
-            });
-
-            closeAddPlayerModal();
-            // รีเซ็ตฟอร์ม
-            document.getElementById('add-player-number').value = "";
-            document.getElementById('add-player-u').value = "";
-            document.getElementById('add-player-fullname').value = "";
-            document.getElementById('add-player-nickname').value = "";
-            document.getElementById('add-player-birth').value = "";
-            preview.src = "";
-            preview.classList.add('hidden');
-            document.getElementById('add-profile-icon').classList.remove('hidden');
-
-            pushDataToCloud();
+            pushDataToCloud(); 
             refreshAllViews();
         }
 
         function openProfileEditModal(pid) {
             const p = players.find(x => x.id === pid);
-            if(!p) return;
+            if (!p) return;
 
             document.getElementById('edit-profile-pid').value = p.id;
-            document.getElementById('edit-profile-number').value = p.no;
-            document.getElementById('edit-profile-u').value = p.u;
             document.getElementById('edit-profile-fullname').value = p.name;
             document.getElementById('edit-profile-nickname').value = p.nickname;
+            document.getElementById('edit-profile-number').value = p.no || '';
+            document.getElementById('edit-profile-u').value = p.u;
             
-            if (p.birth && p.birth !== "ไม่ระบุ") {
-                document.getElementById('edit-profile-birth').value = String(p.birth).split('T')[0];
+            // [แก้ไขจุดที่ 3] จัดโครงสร้างฟอร์แมตวันเกิดให้สะอาดในป๊อปอัปแก้ไข เพื่อให้ช่อง Date ทำงานได้ถูกต้อง
+            const cleanBirth = p.birth ? String(p.birth).split('T')[0] : '';
+            document.getElementById('edit-profile-birth').value = cleanBirth;
+            
+            const previewImg = document.getElementById('edit-profile-preview');
+            const placeholderIcon = document.getElementById('edit-profile-icon-placeholder');
+            
+            if (p.avatar) {
+                previewImg.src = p.avatar;
+                previewImg.classList.remove('hidden');
+                placeholderIcon.classList.add('hidden');
             } else {
-                document.getElementById('edit-profile-birth').value = "";
+                previewImg.src = "";
+                previewImg.classList.add('hidden');
+                placeholderIcon.classList.remove('hidden');
             }
 
-            const prev = document.getElementById('edit-profile-preview');
-            prev.src = p.avatar ? p.avatar : "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23ccc' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M8 14s1.5 2 4 2 4-2 4-2'/><line x1='9' y1='9' x2='9.01' y2='9'/><line x1='15' y1='9' x2='15.01' y2='9'/></svg>";
-
-            document.getElementById('edit-player-modal').classList.remove('hidden');
+            document.getElementById('edit-profile-modal').classList.remove('hidden');
         }
 
         function closeProfileEditModal() {
-            document.getElementById('edit-player-modal').classList.add('hidden');
+            document.getElementById('edit-profile-modal').classList.add('hidden');
+            document.getElementById('edit-profile-form').reset();
+        }
+
+        function previewEditProfileImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = function(evt) {
+                document.getElementById('edit-profile-preview').src = evt.target.result;
+                document.getElementById('edit-profile-preview').classList.remove('hidden');
+                document.getElementById('edit-profile-icon-placeholder').classList.add('hidden');
+            };
+            r.readAsDataURL(file);
         }
 
         function savePlayerProfile(e) {
-            e.preventDefault();
-            const pid = document.getElementById('edit-profile-pid').value;
-            const pIndex = players.findIndex(x => x.id === pid);
-            
-            if (pIndex !== -1) {
-                // สำรองข้อมูลเดิมของนักกีฬาคนนี้ไว้ก่อน
-                const oldPlayerData = players[pIndex];
+    e.preventDefault();
+    const pid = document.getElementById('edit-profile-pid').value; //
+    const pIndex = players.findIndex(x => x.id === pid); //
+    
+    if (pIndex !== -1) {
+        // สำรองข้อมูลเดิมของนักกีฬาคนนี้ไว้ก่อน
+        const oldPlayerData = players[pIndex];
 
-                // ดึงค่าที่กรอกจากหน้าฟอร์มแก้ไข
-                const newName = document.getElementById('edit-profile-fullname').value;
-                const newNickname = document.getElementById('edit-profile-nickname').value;
-                const newNo = document.getElementById('edit-profile-number').value;
-                const newU = document.getElementById('edit-profile-u').value;
-                let newBirth = document.getElementById('edit-profile-birth').value;
+        // ดึงค่าที่กรอกจากหน้าฟอร์มแก้ไข
+        const newName = document.getElementById('edit-profile-fullname').value; //
+        const newNickname = document.getElementById('edit-profile-nickname').value; //
+        const newNo = document.getElementById('edit-profile-number').value; //
+        const newU = document.getElementById('edit-profile-u').value; //
+        let newBirth = document.getElementById('edit-profile-birth').value; //
 
-                // ⭐ [จุดแก้ไขสำคัญ] ป้องกันวันเกิดหาย: 
-                // ถ้าช่อง input วันเกิดว่างเปล่า แต่ในฐานข้อมูลเก่าเคยมีวันเกิดอยู่แล้ว ให้ใช้ค่าเดิม
-                if (!newBirth && oldPlayerData.birth && oldPlayerData.birth !== "ไม่ระบุ") {
-                    newBirth = String(oldPlayerData.birth).split('T')[0]; // ดึงค่าวันเกิดเดิมมาใช้
-                }
-
-                // อัปเดตข้อมูลลงในอาร์เรย์ระบบ
-                players[pIndex].name = newName;
-                players[pIndex].nickname = newNickname;
-                players[pIndex].no = newNo;
-                players[pIndex].u = newU;
-                players[pIndex].birth = newBirth; // นำวันที่ที่ผ่านการตรวจสอบแล้วไปใช้
-
-                // จัดการรูปภาพโปรไฟล์ (ถ้ามีการอัปโหลดใหม่)
-                const previewSrc = document.getElementById('edit-profile-preview').src;
-                if (previewSrc.startsWith('data:image')) {
-                    players[pIndex].avatar = previewSrc;
-                }
-
-                // ปิดป๊อปอัปและสั่งบันทึกขึ้น Cloud ออนไลน์ทันที
-                closeProfileEditModal();
-                pushDataToCloud();
-                refreshAllViews();
-            }
+        // ⭐ [จุดแก้ไขสำคัญ] ป้องกันวันเกิดหาย: 
+        // ถ้าช่อง input วันเกิดว่างเปล่า แต่ในฐานข้อมูลเก่าเคยมีวันเกิดอยู่แล้ว ให้ใช้ค่าเดิม
+        if (!newBirth && oldPlayerData.birth && oldPlayerData.birth !== "ไม่ระบุ") {
+            newBirth = String(oldPlayerData.birth).split('T')[0]; // ดึงค่าวันเกิดเดิมมาใช้
         }
 
-        function deletePlayerRow(pid) {
-            if(confirm("คุณต้องการลบข้อมูลนักกีฬาคนนี้ออกจากฐานข้อมูลระบบจริงหรือไม่?")) {
-                exclusionDb[pid] = true;
-                pushDataToCloud();
-                refreshAllViews();
-            }
+        // อัปเดตข้อมูลลงในอาร์เรย์ระบบ
+        players[pIndex].name = newName;
+        players[pIndex].nickname = newNickname;
+        players[pIndex].no = newNo;
+        players[pIndex].u = newU;
+        players[pIndex].birth = newBirth; // นำวันที่ที่ผ่านการตรวจสอบแล้วไปใช้
+
+        // จัดการรูปภาพโปรไฟล์ (ถ้ามีการอัปโหลดใหม่)
+        const previewSrc = document.getElementById('edit-profile-preview').src; //
+        if (previewSrc.startsWith('data:image')) { //
+            players[pIndex].avatar = previewSrc; //
         }
 
-        // RENDER METHOD 3: QR CHECK-IN TIMELINE INTERFACE
-        let webcamStream = null;
-        function startCameraScanner() {
-            const video = document.getElementById('webcam-video');
-            const placeholder = document.getElementById('camera-placeholder');
+        // ปิดป๊อปอัปและสั่งบันทึกขึ้น Cloud ออนไลน์ทันที
+        closeProfileEditModal(); //
+        pushDataToCloud(); //
+        refreshAllViews(); //
+    }
+}
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(s => {
-                webcamStream = s;
-                video.srcObject = s;
-                video.classList.remove('hidden');
-                placeholder.classList.add('hidden');
-            })
-            .catch(err => {
-                alert("ไม่สามารถเข้าถึงกล้องของคุณได้ โครงสร้างเว็บแอปรันจำลองผ่านกล่องพิมพ์ข้อมูลแทน");
+        function updateReportDropdown() {
+            const select = document.getElementById('report-player-select'); if(!select) return; select.innerHTML = '<option value="">-- เลือกรายชื่อนักกีฬา --</option>';
+            players.forEach(p => { select.innerHTML += `<option value="${p.id}">No.${p.no || '-'} ${p.name} (${p.nickname})</option>`; });
+        }
+
+        function generateIndividualReport() {
+            const area = document.getElementById('print-report-area');
+            const id = document.getElementById('report-player-select').value;
+            if(!id) {
+                area.innerHTML = `<p class="text-center text-gray-400 mt-20">กรุณาเลือกรายชื่อนักกีฬาเพื่อประมวลผลรายงาน</p>`;
+                return;
+            }
+            const p = players.find(x => x.id === id); if(!p || !area) return;
+
+            const workingDays = getWorkingDaysOfSelectedWeek();
+            const stats = getPlayerWeeklyStats(p.id, workingDays);
+
+            const barData = stats.dailyStatuses.map(st => st !== 'ยังไม่ได้เช็ค' ? 1 : 0);
+            const barColors = stats.dailyStatuses.map(st => {
+                if(st === '✓') return '#10B981';
+                if(st === '✕') return '#EF4444';
+                if(st === 'ลา') return '#F59E0B';
+                if(st === 'วันหยุด') return '#9CA3AF';
+                return '#E5E7EB';
             });
+
+            // ล้างฟอร์แมตวันเกิดดึงแค่ YYYY-MM-DD ป้องกันปัญหาเวลาต่อท้าย
+            const reportBirthClean = p.birth ? String(p.birth).split('T')[0] : 'ไม่ระบุ';
+
+            // [แก้ไขจุดที่ 1] บล็อกส่วนเรนเดอร์ เปลี่ยนจาก p.birth ไปเรียกใช้ reportBirthClean เพื่อตัดเวลาทิ้งถาวร
+            area.innerHTML = `
+                <div class="space-y-6 text-black">
+                    <div class="flex justify-between items-center border-b-4 border-gray-800 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight">ASSUMPTION COLLEGE BASKETBALL</h2>
+                            <p class="text-sm font-semibold text-gray-600">รายงานสถิติการเข้าฝึกซ้อมและการเข้าร่วมกิจกรรมประจำสัปดาห์</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="px-3 py-1 bg-gray-900 text-white font-bold text-xs rounded">OFFICIAL REPORT</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                        <div class="w-32 h-32 rounded-xl bg-gray-200 overflow-hidden shrink-0 border border-gray-300 shadow-sm">
+                            ${p.avatar ? `<img src="${p.avatar}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-user text-4xl"></i></div>`}
+                        </div>
+                        <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 text-sm w-full">
+                            <div><span class="text-gray-500 font-medium">ชื่อ-นามสกุล:</span> <strong class="text-base text-gray-900">${p.name}</strong></div>
+                            <div><span class="text-gray-500 font-medium">ชื่อเล่น:</span> <strong class="text-base text-gray-900">${p.nickname}</strong></div>
+                            <div><span class="text-gray-500 font-medium">หมายเลขเสื้อ:</span> <strong class="text-base text-red-600">No.${p.no || '-'}</strong></div>
+                            <div><span class="text-gray-500 font-medium">รุ่นอายุกลุ่มนักกีฬา:</span> <span class="bg-gray-200 px-2 py-0.5 rounded font-bold text-xs">U${p.u}</span></div>
+                            <div class="md:col-span-2"><span class="text-gray-500 font-medium">วันเดือนปีเกิด:</span> <strong class="text-gray-900">${reportBirthClean}</strong></div>
+                            <div class="md:col-span-2 text-indigo-600 font-semibold text-xs border-t pt-2 mt-1">
+                                <i class="fa-solid fa-calendar-days"></i> ช่วงการตรวจสอบสัปดาห์ปัจจุบัน: ${workingDays[0]} ถึง ${workingDays[4]}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-6 pt-2">
+                        <div class="md:col-span-3 border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between">
+                            <h4 class="text-xs font-bold text-gray-700 mb-2 border-b pb-1"><i class="fa-solid fa-chart-bar text-indigo-500"></i> บันทึกเช็คชื่อสถานะรายวัน (จันทร์ - ศุกร์)</h4>
+                            <div class="relative h-48 w-full"><canvas id="reportBarChartCanvas"></canvas></div>
+                        </div>
+                        
+                        <div class="md:col-span-2 border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between">
+                            <h4 class="text-xs font-bold text-gray-700 mb-2 border-b pb-1"><i class="fa-solid fa-chart-pie text-emerald-500"></i> สัดส่วนเปอร์เซ็นต์สะสมสัปดาห์</h4>
+                            <div class="relative h-48 w-full"><canvas id="reportPieChartCanvas"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 text-white p-4 rounded-xl flex justify-around text-center text-sm font-bold">
+                        <div class="text-green-400">มาฝึกซ้อม: ${stats.m} วัน</div>
+                        <div class="text-red-400">ขาดซ้อม: ${stats.k} วัน</div>
+                        <div class="text-amber-400">ลากิจ/ลาป่วย: ${stats.l} วัน</div>
+                        <div class="text-gray-400">วันหยุดสโมสร: ${stats.h} วัน</div>
+                    </div>
+
+                    <div class="border border-gray-300 rounded-xl p-4 bg-gray-50 space-y-2">
+                        <div class="flex justify-between items-center border-b pb-1">
+                            <h4 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-comment-medical text-red-600"></i> ความคิดเห็น/ข้อเสนอแนะจากผู้ฝึกสอน (ให้นักกีฬานำไปปรับปรุงแก้ไข)</h4>
+                            <button onclick="document.getElementById('coach-comment-input').focus()" class="no-print bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-semibold shadow-xs transition flex items-center gap-1">
+                                <i class="fa-solid fa-pen"></i> คลิกเพื่อพิมพ์คอมเม้นท์
+                            </button>
+                        </div>
+                        <textarea id="coach-comment-input" rows="3" placeholder="ระบุรายละเอียด ฟอร์มการเล่น จุดที่ต้องปรับปรุงแก้ไข เช่น ระบบทีมเวิร์ค, การป้องกัน หรือความฟิตร่างกาย..." class="w-full p-2 bg-transparent border border-dashed border-gray-300 rounded-lg text-sm focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-hidden resize-none font-medium text-gray-800"></textarea>
+                    </div>
+
+                    <div class="pt-6 flex justify-between text-xs text-center font-medium text-gray-600">
+                        <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ผู้ฝึกสอน / สตาฟโค้ช</div>
+                        <div class="w-48 border-t border-gray-400 pt-2 mt-8 mx-auto">ลงชื่อ__________________<br>ฝ่ายทะเบียนนักกีฬา AC</div>
+                    </div>
+                </div>`;
+
+            setTimeout(() => {
+                const ctxBar = document.getElementById('reportBarChartCanvas');
+                if(ctxBar) {
+                    if (reportBarChart) reportBarChart.destroy();
+                    reportBarChart = new Chart(ctxBar, {
+                        type: 'bar',
+                        data: {
+                            labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสฯ', 'ศุกร์'],
+                            datasets: [{
+                                data: barData,
+                                backgroundColor: barColors,
+                                borderRadius: 4,
+                                barThickness: 24
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { max: 1.2, display: false },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                datalabels: {
+                                    anchor: 'end',
+                                    align: 'top',
+                                    font: { weight: 'bold', size: 11 },
+                                    formatter: (value, context) => {
+                                        const st = stats.dailyStatuses[context.dataIndex];
+                                        return st === '✓' ? 'มา' : st === '✕' ? 'ขาด' : st === 'ลา' ? 'ลา' : st === 'วันหยุด' ? 'หยุด' : 'ไม่มีซ้อม';
+                                    },
+                                    color: (context) => barColors[context.dataIndex]
+                                }
+                            }
+                        },
+                        plugins: [ChartDataLabels]
+                    });
+                }
+
+                const ctxPie = document.getElementById('reportPieChartCanvas');
+                if(ctxPie) {
+                    if (reportPieChart) reportPieChart.destroy();
+                    const sum = stats.m + stats.k + stats.l + stats.h;
+                    reportPieChart = new Chart(ctxPie, {
+                        type: 'pie',
+                        data: {
+                            labels: ['มา', 'ขาด', 'ลา', 'หยุด'],
+                            datasets: [{
+                                data: [stats.m, stats.k, stats.l, stats.h],
+                                backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#9CA3AF']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                                datalabels: {
+                                    color: '#fff',
+                                    font: { weight: 'bold', size: 10 },
+                                    formatter: (value) => {
+                                        if (value === 0 || sum === 0) return '';
+                                        return ((value * 100) / sum).toFixed(0) + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [ChartDataLabels]
+                    });
+                }
+            }, 50);
         }
-        function stopCameraScanner() {
-            if(webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+
+        function initChart() {
+            const ctx = document.getElementById('attendanceChart'); if(!ctx) return;
+            myChart = new Chart(ctx, {
+                type: 'bar', 
+                data: {
+                    labels: ["U12","U13","U14","U15","U16","U17","U18","นักกีฬาใหม่"], 
+                    datasets:[{
+                        label:'จำนวนนักกีฬาที่เข้าซ้อมวันนี้ (คน)',
+                        data:[0,0,0,0,0,0,0,0],
+                        backgroundColor:'#10B981',
+                        borderRadius: 6
+                    }]
+                }, 
+                options:{
+                    responsive:true,
+                    maintainAspectRatio:false,
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+            updateChartData();
+        }
+
+        function updateChartData() {
+            if(!myChart) return;
+            const date = getSelectedDate(); 
+            const dayRecords = attendanceDb[date] || {};
+            let counts = Array(8).fill(0); 
+            const keys = ["12","13","14","15","16","17","18","New"];
+            
+            players.forEach(p => {
+                if(exclusionDb[p.id]) return; 
+                if(dayRecords[p.id]?.status === '✓') { 
+                    const idx = keys.indexOf(p.u); 
+                    if(idx !== -1) counts[idx]++; 
+                }
+            });
+            myChart.data.datasets[0].data = counts; 
+            myChart.update();
+        }
+
+        function initWeeklyPieChart() {
+            const ctx = document.getElementById('weeklyPieChart'); if(!ctx) return;
+            weeklyPieChart = new Chart(ctx, {
+                type: 'pie', 
+                plugins: [ChartDataLabels], 
+                data: {
+                    labels: ['มา','ขาด','ลา','หยุด'],
+                    datasets: [{
+                        data: [0,0,0,0],
+                        backgroundColor: ['#10B981','#EF4444','#F59E0B','#9CA3AF']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: 25 },
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 6,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            backgroundColor: (context) => context.dataset.backgroundColor[context.dataIndex],
+                            color: '#fff',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                let sum = 0;
+                                let dataArr = ctx.chart.data.datasets[0].data;
+                                dataArr.forEach(data => { sum += data; });
+                                if (sum === 0) return value;
+                                let percentage = (value * 100 / sum).toFixed(1) + "%";
+                                return `${ctx.chart.data.labels[ctx.dataIndex]}: ${value} คน (${percentage})`;
+                            }
+                        }
+                    }
+                }
+            });
+            updateWeeklyPieChart();
+        }
+
+        function updateWeeklyPieChart() {
+            if(!weeklyPieChart) return;
+            let m=0, k=0, l=0, h=0;
+            const filterType = document.getElementById('dashboard-week-filter').value;
+            
+            let targetDates = Object.keys(attendanceDb);
+            const todayStr = getSelectedDate();
+            const todayObj = new Date(todayStr);
+
+            if (filterType !== 'ALL') {
+                let daysLimit = 7; 
+                if (filterType === 'LAST_2_WEEKS') daysLimit = 14;
+                if (filterType === 'LAST_4_WEEKS') daysLimit = 28;
+
+                targetDates = targetDates.filter(dStr => {
+                    const dateObj = new Date(dStr);
+                    const timeDiff = todayObj - dateObj;
+                    const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+                    return daysDiff >= 0 && daysDiff < daysLimit;
+                });
+            }
+
+            targetDates.forEach(d => {
+                if(!attendanceDb[d]) return;
+                Object.keys(attendanceDb[d]).forEach(pid => {
+                    if(exclusionDb[pid]) return; 
+                    const s = attendanceDb[d][pid].status;
+                    if(s==='✓') m++; else if(s==='✕') k++; else if(s==='ลา') l++; else if(s==='วันหยุด') h++;
+                });
+            });
+
+            weeklyPieChart.data.datasets[0].data = [m,k,l,h]; 
+            weeklyPieChart.update();
+            document.getElementById('weekly-pie-summary').innerText = `มา ${m} | ขาด ${k} | ลา ${l} | วันหยุด ${h}`;
+        }
+
+        async function startCameraStream() {
+            const v = document.getElementById('webcam-video');
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}});
+                v.srcObject = cameraStream; v.classList.remove('hidden');
+                document.getElementById('camera-placeholder').classList.add('hidden');
+            } catch(e) { alert("เปิดกล้องล้มเหลว"); }
+        }
+
+        function stopCameraStream() {
+            if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
             document.getElementById('webcam-video').classList.add('hidden');
             document.getElementById('camera-placeholder').classList.remove('hidden');
         }
@@ -870,154 +1326,20 @@
                 const date = getSelectedDate(); if(!attendanceDb[date]) attendanceDb[date] = {};
                 attendanceDb[date][p.id] = { status: '✓', note: 'สแกนเช็คอินออนไลน์หน้าสนาม' };
                 document.getElementById('qr-input-mock').value = "";
-                
-                // เพิ่มรายการลงในประวัติการสแกนฝั่งขวา
-                const logCont = document.getElementById('qr-log-container');
-                const log = document.createElement('div');
-                log.className = "bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-xl flex justify-between items-center animate-pulse";
-                log.innerHTML = `<span><b>#${p.no} ${p.nickname}</b> เช็คอินเข้าซ้อมสำเร็จ</span> <span class="text-gray-400 font-mono">${new Date().toLocaleTimeString()}</span>`;
-                logCont.insertBefore(log, logCont.firstChild);
-
-                pushDataToCloud(true);
+                pushDataToCloud();
                 refreshAllViews();
             } else { alert("ไม่พบข้อมูลนักกีฬาคนนี้ หรือนักกีฬาถูกตัดออกจากยอดระบบ"); }
         }
 
-        // RENDER METHOD 4: REPORT DISPLAY TABLE
-        function renderReportArea() {
-            const tbody = document.getElementById('report-table-body');
-            tbody.innerHTML = "";
-            const date = getSelectedDate();
-            const activePlayers = players.filter(x => !exclusionDb[x.id]);
-
-            let tot = activePlayers.length, pres = 0, abs = 0;
-            activePlayers.sort((a,b) => parseInt(a.no||0) - parseInt(b.no||0));
-
-            activePlayers.forEach(p => {
-                const st = attendanceDb[date]?.[p.id]?.status || '-';
-                const nt = attendanceDb[date]?.[p.id]?.note || '-';
-                
-                if(st === '✓') pres++; else if(st === '✕') abs++;
-
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-gray-100 text-xs text-gray-700";
-                tr.innerHTML = `
-                    <td class="py-2.5 px-3 text-center font-bold">#${p.no}</td>
-                    <td class="py-2.5 px-3 font-medium">${p.name} (${p.nickname})</td>
-                    <td class="py-2.5 px-3 text-center">U${p.u}</td>
-                    <td class="py-2.5 px-3 text-center font-bold ${st==='✓'?'text-green-600':st==='✕'?'text-red-500':'text-gray-400'}">${st==='✓'?'มาซ้อม':st==='✕'?'ขาดซ้อม':'ไม่ระบุ'}</td>
-                    <td class="py-2.5 px-3 text-gray-400">${nt}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('rep-stat-total').innerText = tot;
-            document.getElementById('rep-stat-present').innerText = pres;
-            document.getElementById('rep-stat-absent').innerText = abs;
-        }
-
         function exportToExcel() {
-            let csv = "\uFEFFเบอร์,ชื่อ,สถานะ,รุ่นอายุ\n";
+            let csv = "\uFEFFเบอร์,ชื่อ,สถานะ\n";
             players.forEach(p => { 
                 if(!exclusionDb[p.id]) {
-                    csv += `"${p.no}","${p.name}","${attendanceDb[getSelectedDate()]?.[p.id]?.status||'-'}","U${p.u}"\n`; 
+                    csv += `"${p.no}","${p.name}","${attendanceDb[getSelectedDate()]?.[p.id]?.status||'-'}"\n`; 
                 }
             });
             const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `รายงานการซ้อม_${getSelectedDate()}.csv`;
-            a.click();
-        }
-
-        // RENDER METHOD 5: PANEL DASHBOARD CORNER VISUALIZATIONS
-        function renderBirthdayPanel() {
-            const container = document.getElementById('birthday-list-container');
-            container.innerHTML = "";
-            const currentMonth = new Date().getMonth() + 1; // 1 - 12
-            let bCount = 0;
-
-            players.forEach(p => {
-                if(!exclusionDb[p.id] && p.birth) {
-                    const m = parseInt(p.birth.split('-')[1]);
-                    if(m === currentMonth) {
-                        bCount++;
-                        const chip = document.createElement('div');
-                        chip.className = "bg-red-50 text-red-700 font-medium p-2.5 rounded-xl border border-red-100 flex items-center justify-between";
-                        chip.innerHTML = `<span><i class="fa-solid fa-cake-candles mr-2"></i> #${p.no} ${p.name} (${p.nickname})</span> <b class="text-xs bg-white text-red-500 rounded px-1.5 py-0.5 shadow-sm">U${p.u}</b>`;
-                        container.appendChild(chip);
-                    }
-                }
-            });
-
-            if(bCount === 0) {
-                container.innerHTML = "<div class='text-gray-400 italic text-xs col-span-2 py-2 text-center'>ไม่มีรายชื่อนักกีฬาเกิดในเดือนนี้</div>";
-            }
-            document.getElementById('dash-birthday').innerText = bCount + " คน";
-        }
-
-        function setupChartsEmpty() {
-            Chart.register(ChartDataLabels);
-            const ctx1 = document.getElementById('chart-u-group').getContext('2d');
-            chartU = new Chart(ctx1, {
-                type: 'bar',
-                data: { labels: [], datasets: [{ label: 'จำนวนนักกีฬาทั้งหมด (คน)', data: [], backgroundColor: '#D90429', borderRadius: 8 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', font: { weight: 'bold' } } } }
-            });
-
-            const ctx2 = document.getElementById('chart-attendance-trend').getContext('2d');
-            chartTrend = new Chart(ctx2, {
-                type: 'line',
-                data: { labels: [], datasets: [{ label: 'จำนวนคนที่เข้าซ้อม (คน)', data: [], borderColor: '#0B132B', tension: 0.3, fill: false }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
-
-        function updateChartsData() {
-            if(!chartU || !chartTrend) return;
-            const activePlayers = players.filter(x => !exclusionDb[x.id]);
-
-            // คํานวณอัตราเฉลี่ยเข้าซ้อมแดชบอร์ดเบื้องต้น
-            const dates = Object.keys(attendanceDb).sort();
-            document.getElementById('dash-sessions').innerText = dates.length + " รอบ";
-            
-            let totalPres = 0, totalSlots = 0;
-            dates.forEach(d => {
-                activePlayers.forEach(p => {
-                    totalSlots++;
-                    if(attendanceDb[d]?.[p.id]?.status === '✓') totalPres++;
-                });
-            });
-            const rate = totalSlots > 0 ? Math.round((totalPres / totalSlots) * 100) : 0;
-            document.getElementById('dash-rate').innerText = rate + "%";
-
-            // 1. Chart U Group
-            const uCounts = {};
-            activePlayers.forEach(p => { uCounts[`U${p.u}`] = (uCounts[`U${p.u}`] || 0) + 1; });
-            const uLabels = Object.keys(uCounts).sort();
-            const uData = uLabels.map(l => uCounts[l]);
-
-            chartU.data.labels = uLabels;
-            chartU.data.datasets[0].data = uData;
-            chartU.update();
-
-            // 2. Chart Attendance Trend 7 วันล่าสุด
-            const last7Dates = dates.slice(-7);
-            const trendData = last7Dates.map(d => {
-                let count = 0;
-                activePlayers.forEach(p => { if(attendanceDb[d]?.[p.id]?.status === '✓') count++; });
-                return count;
-            });
-
-            // แปลงฟอร์แมตวันที่ให้สั้นลงเพื่อความสวยงามในกราฟ
-            const formattedDates = last7Dates.map(d => {
-                const parts = d.split('-');
-                return `${parts[2]}/${parts[1]}`;
-            });
-
-            chartTrend.data.labels = formattedDates;
-            chartTrend.data.datasets[0].data = trendData;
-            chartTrend.update();
+            const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`Attendance_${getSelectedDate()}.csv`; a.click();
         }
     </script>
 </body>
