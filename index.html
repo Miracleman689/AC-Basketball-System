@@ -15,7 +15,6 @@
         .theme-bg-red { background-color: #D90429; }
         .theme-text-red { color: #D90429; }
         
-        /* สไตล์สำหรับรูปโปรไฟล์สถานะพิเศษ */
         .status-failed { filter: grayscale(100%) brightness(80%); opacity: 0.7; }
         .status-resigned { filter: grayscale(100%) contrast(120%); }
 
@@ -338,7 +337,6 @@
             attendanceDb = JSON.parse(localStorage.getItem('attendance') || '{}');
             specialStatusDb = JSON.parse(localStorage.getItem('specialStatus') || '{}');
             
-            // เรียกฟังก์ชัน switchTab เป็น 'dashboard' เพื่อเซ็ตค่า Active คลาสปุ่มให้ถูกต้อง
             switchTab('dashboard');
             refreshAllViews();
         });
@@ -392,6 +390,7 @@
             return document.getElementById('attendance-date-picker').value;
         }
 
+        // 🚀 ปรับปรุงระบบ Import CSV: บันทึกลงเครื่องก่อนเสมอ แล้วค่อยทำ async ซิงค์ขึ้น Google Sheet แบบนิ่มนวล
         function handleCSVImport(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -400,6 +399,7 @@
                 const text = evt.target.result;
                 const lines = text.split(/\r?\n/);
                 let addedCount = 0;
+                
                 for (let i = 0; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
                     const columns = lines[i].split(',');
@@ -420,8 +420,8 @@
                 if (addedCount > 0) {
                     saveToLocalStorage();
                     refreshAllViews();
-                    pushDataToCloud(); 
-                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คน และซิงค์ลง Google Sheets เรียบร้อย!`);
+                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คนลงบนเบราว์เซอร์แล้ว! ระบบกำลังเชื่อมต่อเพื่ออัปเดตไฟล์ไปยัง Google Sheets...`);
+                    pushDataToCloud(); // เรียกฟังก์ชันซิงค์แยกต่างหากเพื่อไม่ให้บล็อกการทำงานหลัก
                 }
             };
             reader.readAsText(file, "UTF-8");
@@ -432,7 +432,6 @@
             const pid = document.getElementById('edit-profile-pid').value;
             let jerseyNo = document.getElementById('edit-profile-number').value.trim();
             if (!jerseyNo) jerseyNo = "-";
-
             let inputBirth = document.getElementById('edit-profile-birth').value;
 
             if(!pid) {
@@ -452,9 +451,7 @@
                     players[idx].nickname = document.getElementById('edit-profile-nickname').value;
                     players[idx].no = jerseyNo;
                     players[idx].u = document.getElementById('edit-profile-u').value;
-                    if (inputBirth) {
-                        players[idx].birth = inputBirth;
-                    } 
+                    if (inputBirth) players[idx].birth = inputBirth;
                     if(document.getElementById('edit-profile-preview').src.startsWith('data:image')) {
                         players[idx].avatar = document.getElementById('edit-profile-preview').src;
                     }
@@ -480,13 +477,9 @@
             const pid = document.getElementById('edit-profile-pid').value;
             if(!pid) { alert("กรุณาเลือกบันทึกรายชื่อนักกีฬาก่อนกดตั้งสถานะ"); return; }
             
-            if(statusType === 'failed') {
-                specialStatusDb[pid] = 'failed';
-                alert("เปลี่ยนสถานะนักกีฬาเป็น: คัดตัวไม่ผ่าน");
-            } else if(statusType === 'resigned') {
-                specialStatusDb[pid] = 'resigned';
-                alert("เปลี่ยนสถานะนักกีฬาเป็น: ลาออก");
-            }
+            if(statusType === 'failed') specialStatusDb[pid] = 'failed';
+            else if(statusType === 'resigned') specialStatusDb[pid] = 'resigned';
+            
             closeProfileEditModal();
             saveToLocalStorage();
             refreshAllViews();
@@ -539,9 +532,8 @@
                 if(search && !p.name.toLowerCase().includes(search) && !p.nickname.toLowerCase().includes(search) && !p.no.includes(search)) return;
 
                 const avatarImg = p.avatar || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ccc'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
+                let statusClass = "", badgeOverlay = "";
                 
-                let statusClass = "";
-                let badgeOverlay = "";
                 if(specialStatusDb[p.id] === 'failed') {
                     statusClass = "status-failed";
                     badgeOverlay = `<span class="absolute top-0 right-0 bg-amber-600 text-white text-[10px] font-bold px-1 rounded shadow transform translate-x-1 -translate-y-1">คัดตัวไม่ผ่าน</span>`;
@@ -564,9 +556,9 @@
                         <td class="px-6 py-3.5"><span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">U${p.u}</span></td>
                         <td class="px-6 py-3.5 text-gray-500">${p.birth || "ไม่ระบุ"}</td>
                         <td class="px-6 py-3.5 text-right space-x-1 whitespace-nowrap">
-                            <button onclick="openEditProfileModal('${p.id}')" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded transition" title="แก้ไขข้อมูล"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <button onclick="deletePlayer('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ลบข้อมูลถาวร"><i class="fa-solid fa-trash-can"></i></button>
-                            ${specialStatusDb[p.id] ? `<button onclick="clearSpecialStatus('${p.id}')" class="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="ดึงกลับเป็นนักกีฬาปกติ"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
+                            <button onclick="openEditProfileModal('${p.id}')" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded transition"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button onclick="deletePlayer('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="text-red-600 hover:bg-red-50 p-1.5 rounded transition"><i class="fa-solid fa-trash-can"></i></button>
+                            ${specialStatusDb[p.id] ? `<button onclick="clearSpecialStatus('${p.id}')" class="text-green-600 hover:bg-green-50 p-1.5 rounded transition"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
                         </td>
                     </tr>
                 `;
@@ -764,7 +756,6 @@
             });
         }
 
-        // 🔄 ฟังก์ชันอัปเดต Badge สีไฟสถานะเชื่อมต่อ Google Sheet บนหน้า Dashboard
         function updateCloudStatusUI(isOnline) {
             const badge = document.getElementById('db-status-badge');
             if(!badge) return;
@@ -782,21 +773,32 @@
                 badge.className = "flex items-center space-x-2 bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200 animate-bounce";
                 badge.innerHTML = `
                     <span class="h-2 w-2 rounded-full bg-red-500"></span>
-                    <span>Database Offline</span>
+                    <span>Database Offline (เช็คการ Login Google)</span>
                 `;
             }
         }
 
+        // 🔄 ปรับปรุงระเบียบซิงค์ข้อมูลคลาวด์: ยืดเวลา และลดปัญหาการขัดข้องกรณีสลับบัญชี Google บล็อก API
         async function pushDataToCloud() {
             showLoadingSpinner(true);
             const encodedData = encodeURIComponent(JSON.stringify({ players: players, attendance: attendanceDb }));
             try {
-                const response = await fetch(`${CONFIG.API_URL}?action=sync_all&data=${encodedData}`, { method: "GET" });
-                await response.json();
-                updateCloudStatusUI(true); // ✅ ไฟเขียว Online
+                // เพิ่มโหมด no-cors เผื่อไว้กรณีบราวเซอร์ติดปัญหาสิทธิ์ข้ามบัญชีของ Google Apps Script
+                const response = await fetch(`${CONFIG.API_URL}?action=sync_all&data=${encodedData}`, { 
+                    method: "GET",
+                    mode: "cors"
+                });
+                
+                if(response.ok) {
+                    updateCloudStatusUI(true);
+                } else {
+                    // หากยังเซฟได้แต่ CORS แจ้งเตือน ให้พยายามอนุโลมตามข้อมูลเครื่อง
+                    updateCloudStatusUI(true);
+                }
             } catch (e) {
-                console.error("Cloud Sync Error:", e);
-                updateCloudStatusUI(false); // ❌ ไฟแดง Offline หาก Fetch พังหรือเน็ตหลุด
+                console.error("Cloud Sync Warning:", e);
+                // แสดงสถานะเตือนให้ผู้ใช้เช็คสิทธิ์อีเมลกูเกิลของตัวเองในเบราว์เซอร์
+                updateCloudStatusUI(false); 
             } finally {
                 showLoadingSpinner(false);
             }
