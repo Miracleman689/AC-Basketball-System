@@ -58,14 +58,12 @@
         </div>
 
         <section id="page-dashboard" class="tab-content space-y-6">
-            <!-- 🔥 ปรับโฉมสถานะการเชื่อมต่อเป็นไอคอนรูปไฟตามสั่ง -->
             <div id="db-status-banner" class="bg-white px-5 py-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-database text-blue-600 text-lg"></i>
                     <span class="text-sm font-semibold text-gray-700">สถานะการเชื่อมต่อ Google Sheets:</span>
                 </div>
                 <div id="db-status-badge">
-                    <!-- สถานะเริ่มต้น (จะโดนเปลี่ยนผ่านสคริปต์) -->
                     <div class="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm animate-pulse">
                         <i class="fa-solid fa-fire text-emerald-500 text-sm"></i>
                         <span>Database Online</span>
@@ -368,9 +366,9 @@
             }
 
             switchTab('dashboard');
+            updateDashboardCharts(); 
             refreshAllViews();
             
-            // ทดสอบเชื่อมต่อคลาวด์ครั้งแรกเพื่อเปิดสถานะไฟ
             updateCloudStatusUI(true);
         });
 
@@ -389,6 +387,7 @@
                 dashFilter.value = today;
                 document.getElementById('attendance-date-picker').value = today;
                 refreshAllViews();
+                updateDashboardCharts(); 
             }
         }
 
@@ -565,7 +564,6 @@
 
             refreshPlayersTable();
             refreshAttendanceView();
-            updateDashboardCharts();
         }
 
         function refreshPlayersTable() {
@@ -808,7 +806,6 @@
             });
         }
 
-        // 🔥 เปลี่ยนแปลง UI แสดงผลสถานะ Google Sheet เป็นไฟกระพริบตามเงื่อนไข (เขียว/แดง)
         function updateCloudStatusUI(isOnline) {
             const badgeContainer = document.getElementById('db-status-badge');
             if(!badgeContainer) return;
@@ -869,7 +866,12 @@
         function updateDashboardCharts() {
             let active = 0, excluded = 0;
             const uMap = {};
-            const targetDate = document.getElementById('dashboard-date-filter')?.value || getSelectedDate();
+            
+            let targetDate = document.getElementById('dashboard-date-filter')?.value;
+            if (!targetDate) {
+                targetDate = new Date().toISOString().split('T')[0];
+            }
+            
             let p=0, l=0, a=0, u=0;
 
             players.forEach(player => {
@@ -984,7 +986,6 @@
 
         function closeProfileEditModal() { document.getElementById('profile-modal').classList.add('hidden'); }
         
-        // 📸 ฟังก์ชันปรับปรุงใหม่: เพิ่มระบบบีบอัดรูปภาพอัตโนมัติก่อนแสดงผลและบันทึก เพื่อแก้ปัญหา LocalStorage เต็ม
         function previewAvatarImage(e) {
             const file = e.target.files[0];
             if(!file) return;
@@ -994,7 +995,7 @@
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 160; // จำกัดขนาดกว้างยาวรูปภาพโปรไฟล์ให้พอดีและไฟล์เล็กมาก
+                    const MAX_WIDTH = 160; 
                     const MAX_HEIGHT = 160;
                     let width = img.width;
                     let height = img.height;
@@ -1010,7 +1011,6 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // บีบอัดคุณภาพไฟล์ JPEG เหลือ 70% ไฟล์จะลดลงเหลือไม่กี่ KB แต่ยังชัดเจนคมชัดบนระบบ
                     const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     document.getElementById('edit-profile-preview').src = compressedDataUrl;
                 };
