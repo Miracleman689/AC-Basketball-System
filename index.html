@@ -72,6 +72,26 @@
                 </div>
             </div>
 
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                        <i class="fa-solid fa-calendar-days text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-700">เลือกวันที่ซ้อมเพื่อตรวจสอบสถิติ</h3>
+                        <p class="text-xs text-gray-400">ระบบจะทำการคำนวณและดึงข้อมูลสถิติต่างๆ ประจำวันที่ระบุ</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="date" id="dashboard-date-filter" 
+                           class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <button onclick="resetDashboardDate()" 
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                        วันล่าสุด
+                    </button>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500">
                     <p class="text-sm text-gray-500 font-medium">นักกีฬาทั้งหมดในระบบ</p>
@@ -143,7 +163,7 @@
             <div class="bg-white p-4 rounded-xl shadow-sm flex flex-wrap gap-3 justify-between items-center">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-calendar-days text-gray-400"></i>
-                    <input type="date" id="attendance-date-picker" onchange="refreshAttendanceView()" class="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                    <input type="date" id="attendance-date-picker" onchange="syncDashboardFilterDate(this.value); refreshAttendanceView();" class="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
                 </div>
                 <div class="flex items-center space-x-2">
                     <span class="text-xs text-gray-500">กรองตามรุ่น:</span>
@@ -331,15 +351,46 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             const today = new Date().toISOString().split('T')[0];
+            
+            // ตั้งค่าวันที่ปัจจุบันให้หน้าลงทะเบียนเข้าเรียนและหน้าแดชบอร์ดเลือกดูย้อนหลัง
             document.getElementById('attendance-date-picker').value = today;
+            const dashFilter = document.getElementById('dashboard-date-filter');
+            if (dashFilter) dashFilter.value = today;
             
             players = JSON.parse(localStorage.getItem('players') || '[]');
             attendanceDb = JSON.parse(localStorage.getItem('attendance') || '{}');
             specialStatusDb = JSON.parse(localStorage.getItem('specialStatus') || '{}');
             
+            // ผูก Event Listener เมื่อผู้ใช้เปลี่ยนวันที่ในหน้า Dashboard 
+            if (dashFilter) {
+                dashFilter.addEventListener('change', () => {
+                    updateDashboardCharts();
+                });
+            }
+
             switchTab('dashboard');
             refreshAllViews();
         });
+
+        // ฟังก์ชันช่วยผูกค่าตัวกรองวันที่แดชบอร์ดเมื่อหน้าเช็คชื่อมีการสลับวันทำงาน
+        function syncDashboardFilterDate(val) {
+            const dashFilter = document.getElementById('dashboard-date-filter');
+            if (dashFilter) {
+                dashFilter.value = val;
+                updateDashboardCharts();
+            }
+        }
+
+        // ฟังก์ชันเมื่อกดปุ่ม "วันล่าสุด" บนแดชบอร์ด
+        function resetDashboardDate() {
+            const today = new Date().toISOString().split('T')[0];
+            const dashFilter = document.getElementById('dashboard-date-filter');
+            if (dashFilter) {
+                dashFilter.value = today;
+                document.getElementById('attendance-date-picker').value = today;
+                refreshAllViews();
+            }
+        }
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(x => x.classList.add('hidden'));
@@ -390,7 +441,6 @@
             return document.getElementById('attendance-date-picker').value;
         }
 
-        // 🚀 ปรับปรุงระบบ Import CSV: บันทึกลงเครื่องก่อนเสมอ แล้วค่อยทำ async ซิงค์ขึ้น Google Sheet แบบนิ่มนวล
         function handleCSVImport(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -421,7 +471,7 @@
                     saveToLocalStorage();
                     refreshAllViews();
                     alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คนลงบนเบราว์เซอร์แล้ว! ระบบกำลังเชื่อมต่อเพื่ออัปเดตไฟล์ไปยัง Google Sheets...`);
-                    pushDataToCloud(); // เรียกฟังก์ชันซิงค์แยกต่างหากเพื่อไม่ให้บล็อกการทำงานหลัก
+                    pushDataToCloud(); 
                 }
             };
             reader.readAsText(file, "UTF-8");
@@ -477,7 +527,7 @@
             const pid = document.getElementById('edit-profile-pid').value;
             if(!pid) { alert("กรุณาเลือกบันทึกรายชื่อนักกีฬาก่อนกดตั้งสถานะ"); return; }
             
-            if(statusType === 'failed') specialStatusDb[pid] = 'failed';
+            if(statusType === 'failed') prependStatus = 'failed';
             else if(statusType === 'resigned') specialStatusDb[pid] = 'resigned';
             
             closeProfileEditModal();
@@ -778,11 +828,8 @@
             }
         }
 
-        // 🔄 ฟังก์ชันปรับปรุงใหม่: เปลี่ยนเป็นระบบ POST เพื่อส่งข้อมูลนักกีฬาจำนวนมาก (แก้ปัญหา URL ยาวเกินไป)
         async function pushDataToCloud() {
             showLoadingSpinner(true);
-            
-            // เตรียมข้อมูลส่งในรูปแบบ Object 
             const payload = {
                 action: "sync_all",
                 players: players,
@@ -790,12 +837,10 @@
             };
 
             try {
-                // ส่งข้อมูลผ่านวิธี POST และแปลง payload เป็น String ส่งไปใน body
                 const response = await fetch(CONFIG.API_URL, { 
                     method: "POST",
                     headers: {
                         "Content-Type": "text/plain;charset=utf-8" 
-                        // ใช้ text/plain เพื่อป้องกันบราวเซอร์บางตัวตรวจจับเรื่อง CORS Preflight
                     },
                     body: JSON.stringify(payload)
                 });
@@ -804,35 +849,38 @@
                     const result = await response.json();
                     if (result.status === "success") {
                         updateCloudStatusUI(true);
-                        alert("🎉 ซิงค์ข้อมูลนักกีฬาทั้งหมดขึ้น Google Sheets สำเร็จเรียบร้อยแล้ว!");
                     } else {
                         console.error("Apps Script Error:", result.message);
                         updateCloudStatusUI(false);
-                        alert("เกิดข้อผิดพลาดจากฝั่ง Google Sheet: " + result.message);
                     }
                 } else {
                     updateCloudStatusUI(false);
-                    alert("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ Google ได้ (Response Not OK)");
                 }
             } catch (e) {
                 console.error("Cloud Sync Error:", e);
                 updateCloudStatusUI(false); 
-                alert("❌ บันทึกไม่สำเร็จ: ข้อมูลอาจจะยาวเกินไป หรือตั้งค่าสิทธิ์ Apps Script ไม่ถูกต้อง");
             } finally {
                 showLoadingSpinner(false);
             }
         }
+
+        // 📊 ฟังก์ชันปรับปรุงใหม่: คำนวณสถิติและการ์ดหน้าแดชบอร์ดตามวันที่เลือกดูย้อนหลัง
         function updateDashboardCharts() {
             let active = 0, excluded = 0;
             const uMap = {};
-            const date = getSelectedDate();
+            
+            // ดึงค่าวันที่ต้องการกรองจากหน้าแดชบอร์ด UI (ถ้าไม่มีให้ยึดจากหน้าเช็คชื่อหลัก)
+            const targetDate = document.getElementById('dashboard-date-filter')?.value || getSelectedDate();
+            
             let p=0, l=0, a=0, u=0;
 
             players.forEach(player => {
                 if(specialStatusDb[player.id]) { excluded++; return; }
                 active++;
                 uMap[player.u] = (uMap[player.u] || 0) + 1;
-                const s = attendanceDb[date]?.[player.id]?.status || '-';
+                
+                // ดึงสถานะการเช็คชื่อของนักกีฬาคนนั้นๆ ตามวันที่ถูกกำหนด
+                const s = attendanceDb[targetDate]?.[player.id]?.status || '-';
                 if(s === '✓') p++;
                 else if(s === 'ล') l++;
                 else if(s === '✕') a++;
@@ -852,14 +900,10 @@
             if(ctxAge) {
                 if(chartInstanceAge) chartInstanceAge.destroy();
 
-                // 1. กำหนดลำดับที่ต้องการให้แสดงใน Legend จากบนลงล่าง
                 const desiredOrder = ["นักกีฬาใหม่", "12", "13", "14", "15", "16", "17", "18"];
-                
-                // คัดกรองเฉพาะรุ่นที่มีข้อมูลนักกีฬาอยู่จริงในระบบ ณ ขณะนั้น
                 const sortedLabels = desiredOrder.filter(key => uMap[key] !== undefined);
                 const sortedData = sortedLabels.map(key => uMap[key]);
 
-                // 2. ปรับแต่งคำอธิบายในแผงแถบสี (Legend Labels) ให้แสดงข้อความและจำนวนคนแยกแต่ละบรรทัด
                 const legendLabels = sortedLabels.map(key => {
                     const count = uMap[key];
                     if (key === "นักกีฬาใหม่") {
@@ -869,11 +913,10 @@
                     }
                 });
 
-                // 3. สร้างกราฟวงกลม (Pie Chart) พร้อมกำหนดค่า Layout ให้อยู่ฝั่งซ้าย
                 chartInstanceAge = new Chart(ctxAge.getContext('2d'), {
                     type: 'pie',
                     data: { 
-                        labels: legendLabels, // ใช้ป้ายชื่อที่จัดฟอร์แมตมีจำนวนคนแล้ว
+                        labels: legendLabels, 
                         datasets: [{ 
                             data: sortedData, 
                             backgroundColor: ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6'] 
@@ -884,11 +927,11 @@
                         maintainAspectRatio: false,
                         plugins: {
                             legend: {
-                                position: 'left', // ย้ายแท่งสีบอกอายุมาไว้ฝั่งซ้ายมือ
-                                align: 'center',  // จัดกึ่งกลางในแนวตั้ง
+                                position: 'left', 
+                                align: 'center',  
                                 labels: {
-                                    boxWidth: 15, // ขนาดของกล่องสี
-                                    padding: 12,  // ระยะห่างระหว่างบรรทัด
+                                    boxWidth: 15, 
+                                    padding: 12,  
                                     font: {
                                         family: "'Kanit', sans-serif",
                                         size: 13,
