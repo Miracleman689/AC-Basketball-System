@@ -778,49 +778,46 @@
             }
         }
 
-        // 🔄 ปรับปรุงระบบซิงค์ข้อมูลคลาวด์: แก้ไขปัญหา CORS และรองรับกรณีข้อมูลยาว
+        // 🔄 ฟังก์ชันปรับปรุงใหม่: เปลี่ยนเป็นระบบ POST เพื่อส่งข้อมูลนักกีฬาจำนวนมาก (แก้ปัญหา URL ยาวเกินไป)
         async function pushDataToCloud() {
             showLoadingSpinner(true);
             
-            // เตรียมข้อมูลที่จะส่ง
+            // เตรียมข้อมูลส่งในรูปแบบ Object 
             const payload = {
+                action: "sync_all",
                 players: players,
                 attendance: attendanceDb
             };
-            
-            const encodedData = encodeURIComponent(JSON.stringify(payload));
-            // เปลี่ยนไปใช้การระบุ action และ data ผ่าน URL parameter ที่เคลียร์ขึ้น
-            const syncUrl = `${CONFIG.API_URL}?action=sync_all&data=${encodedData}`;
 
             try {
-                // ใช้ fetch โดยไม่ต้องใส่โหมด no-cors (เพราะเราเปิด Anyone ใน Apps Script แล้ว)
-                // และตั้ง Timeout ป้องกันหน้าจอค้าง
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 วินาที timeout
-
-                const response = await fetch(syncUrl, { 
-                    method: "GET",
-                    signal: controller.signal
+                // ส่งข้อมูลผ่านวิธี POST และแปลง payload เป็น String ส่งไปใน body
+                const response = await fetch(CONFIG.API_URL, { 
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8" 
+                        // ใช้ text/plain เพื่อป้องกันบราวเซอร์บางตัวตรวจจับเรื่อง CORS Preflight
+                    },
+                    body: JSON.stringify(payload)
                 });
                 
-                clearTimeout(timeoutId);
-
-                if(response.ok) {
+                if (response.ok) {
                     const result = await response.json();
-                    if(result.status === "success") {
+                    if (result.status === "success") {
                         updateCloudStatusUI(true);
-                        console.log("Syncสำเร็จ:", result.message);
+                        alert("🎉 ซิงค์ข้อมูลนักกีฬาทั้งหมดขึ้น Google Sheets สำเร็จเรียบร้อยแล้ว!");
                     } else {
                         console.error("Apps Script Error:", result.message);
                         updateCloudStatusUI(false);
+                        alert("เกิดข้อผิดพลาดจากฝั่ง Google Sheet: " + result.message);
                     }
                 } else {
                     updateCloudStatusUI(false);
+                    alert("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ Google ได้ (Response Not OK)");
                 }
             } catch (e) {
                 console.error("Cloud Sync Error:", e);
-                // หากติดปัญหา CORS แต่ข้อมูลอาจจะฝังไปแล้ว หรือเน็ตหลุด ให้แสดงเป็น Offline
                 updateCloudStatusUI(false); 
+                alert("❌ บันทึกไม่สำเร็จ: ข้อมูลอาจจะยาวเกินไป หรือตั้งค่าสิทธิ์ Apps Script ไม่ถูกต้อง");
             } finally {
                 showLoadingSpinner(false);
             }
