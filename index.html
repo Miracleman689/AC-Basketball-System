@@ -122,13 +122,13 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow-sm">
                     <div class="flex justify-between items-center mb-4">
-                        <h4 class="font-bold text-gray-700 flex items-center">
-                            <i class="fa-solid fa-chart-pie mr-2 text-blue-500"></i> สัดส่วนนักกีฬาแยกตามรุ่นอายุ (U)
-                        </h4>
-                        <button onclick="triggerChartRefresh('pie-refresh-icon')" class="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition shadow-sm bg-gray-50 border border-gray-100" title="ดึงข้อมูลใหม่เพื่อความถูกต้อง">
-                            <i id="pie-refresh-icon" class="fa-solid fa-arrows-rotate text-sm"></i>
-                        </button>
-                    </div>
+                    <h4 class="font-bold text-gray-700 flex items-center">
+                    <i class="fa-solid fa-chart-pie mr-2 text-blue-500"></i> สัดส่วนนักกีฬาแยกตามรุ่นอายุ (U)
+                    </h4>
+                    <button onclick="updateDashboardCharts()" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded transition">
+                    <i class="fa-solid fa-rotate"></i> รีเฟรชกราฟ
+                    </button>
+                </div>
                     <div class="h-64 flex items-center justify-center"><canvas id="chart-age-groups"></canvas></div>
                 </div>
                 
