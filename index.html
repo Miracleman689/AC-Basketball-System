@@ -58,17 +58,18 @@
         </div>
 
         <section id="page-dashboard" class="tab-content space-y-6">
+            <!-- 🔥 ปรับโฉมสถานะการเชื่อมต่อเป็นไอคอนรูปไฟตามสั่ง -->
             <div id="db-status-banner" class="bg-white px-5 py-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-database text-blue-600 text-lg"></i>
                     <span class="text-sm font-semibold text-gray-700">สถานะการเชื่อมต่อ Google Sheets:</span>
                 </div>
-                <div id="db-status-badge" class="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">
-                    <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span>Database Online</span>
+                <div id="db-status-badge">
+                    <!-- สถานะเริ่มต้น (จะโดนเปลี่ยนผ่านสคริปต์) -->
+                    <div class="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm animate-pulse">
+                        <i class="fa-solid fa-fire text-emerald-500 text-sm"></i>
+                        <span>Database Online</span>
+                    </div>
                 </div>
             </div>
 
@@ -352,7 +353,6 @@
         window.addEventListener('DOMContentLoaded', () => {
             const today = new Date().toISOString().split('T')[0];
             
-            // ตั้งค่าวันที่ปัจจุบันให้หน้าลงทะเบียนเข้าเรียนและหน้าแดชบอร์ดเลือกดูย้อนหลัง
             document.getElementById('attendance-date-picker').value = today;
             const dashFilter = document.getElementById('dashboard-date-filter');
             if (dashFilter) dashFilter.value = today;
@@ -361,7 +361,6 @@
             attendanceDb = JSON.parse(localStorage.getItem('attendance') || '{}');
             specialStatusDb = JSON.parse(localStorage.getItem('specialStatus') || '{}');
             
-            // ผูก Event Listener เมื่อผู้ใช้เปลี่ยนวันที่ในหน้า Dashboard 
             if (dashFilter) {
                 dashFilter.addEventListener('change', () => {
                     updateDashboardCharts();
@@ -370,9 +369,11 @@
 
             switchTab('dashboard');
             refreshAllViews();
+            
+            // ทดสอบเชื่อมต่อคลาวด์ครั้งแรกเพื่อเปิดสถานะไฟ
+            updateCloudStatusUI(true);
         });
 
-        // ฟังก์ชันช่วยผูกค่าตัวกรองวันที่แดชบอร์ดเมื่อหน้าเช็คชื่อมีการสลับวันทำงาน
         function syncDashboardFilterDate(val) {
             const dashFilter = document.getElementById('dashboard-date-filter');
             if (dashFilter) {
@@ -381,7 +382,6 @@
             }
         }
 
-        // ฟังก์ชันเมื่อกดปุ่ม "วันล่าสุด" บนแดชบอร์ด
         function resetDashboardDate() {
             const today = new Date().toISOString().split('T')[0];
             const dashFilter = document.getElementById('dashboard-date-filter');
@@ -470,7 +470,7 @@
                 if (addedCount > 0) {
                     saveToLocalStorage();
                     refreshAllViews();
-                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คนลงบนเบราว์เซอร์แล้ว! ระบบกำลังเชื่อมต่อเพื่ออัปเดตไฟล์ไปยัง Google Sheets...`);
+                    alert(`🎉 นำเข้าข้อมูลนักกีฬาสำเร็จ ${addedCount} คนแล้ว!`);
                     pushDataToCloud(); 
                 }
             };
@@ -483,28 +483,29 @@
             let jerseyNo = document.getElementById('edit-profile-number').value.trim();
             if (!jerseyNo) jerseyNo = "-";
             let inputBirth = document.getElementById('edit-profile-birth').value;
+            const previewSrc = document.getElementById('edit-profile-preview').src;
+
+            const playerData = {
+                name: document.getElementById('edit-profile-fullname').value,
+                nickname: document.getElementById('edit-profile-nickname').value,
+                no: jerseyNo,
+                u: document.getElementById('edit-profile-u').value,
+                birth: inputBirth || "",
+                avatar: previewSrc.startsWith('data:image') ? previewSrc : ""
+            };
 
             if(!pid) {
-                players.push({
-                    id: "P_" + Date.now(),
-                    name: document.getElementById('edit-profile-fullname').value,
-                    nickname: document.getElementById('edit-profile-nickname').value,
-                    no: jerseyNo,
-                    u: document.getElementById('edit-profile-u').value,
-                    birth: inputBirth || "",
-                    avatar: document.getElementById('edit-profile-preview').src.startsWith('data:image') ? document.getElementById('edit-profile-preview').src : ""
-                });
+                playerData.id = "P_" + Date.now();
+                players.push(playerData);
             } else {
                 const idx = players.findIndex(x => x.id === pid);
                 if(idx !== -1) {
-                    players[idx].name = document.getElementById('edit-profile-fullname').value;
-                    players[idx].nickname = document.getElementById('edit-profile-nickname').value;
-                    players[idx].no = jerseyNo;
-                    players[idx].u = document.getElementById('edit-profile-u').value;
+                    players[idx].name = playerData.name;
+                    players[idx].nickname = playerData.nickname;
+                    players[idx].no = playerData.no;
+                    players[idx].u = playerData.u;
                     if (inputBirth) players[idx].birth = inputBirth;
-                    if(document.getElementById('edit-profile-preview').src.startsWith('data:image')) {
-                        players[idx].avatar = document.getElementById('edit-profile-preview').src;
-                    }
+                    players[idx].avatar = playerData.avatar;
                 }
             }
             closeProfileEditModal();
@@ -527,7 +528,7 @@
             const pid = document.getElementById('edit-profile-pid').value;
             if(!pid) { alert("กรุณาเลือกบันทึกรายชื่อนักกีฬาก่อนกดตั้งสถานะ"); return; }
             
-            if(statusType === 'failed') prependStatus = 'failed';
+            if(statusType === 'failed') specialStatusDb[pid] = 'failed';
             else if(statusType === 'resigned') specialStatusDb[pid] = 'resigned';
             
             closeProfileEditModal();
@@ -569,6 +570,7 @@
 
         function refreshPlayersTable() {
             const tbody = document.getElementById('players-table-body');
+            if(!tbody) return;
             tbody.innerHTML = '';
             const search = document.getElementById('search-player-input').value.toLowerCase();
             const filterU = document.getElementById('filter-u-select').value;
@@ -806,24 +808,27 @@
             });
         }
 
+        // 🔥 เปลี่ยนแปลง UI แสดงผลสถานะ Google Sheet เป็นไฟกระพริบตามเงื่อนไข (เขียว/แดง)
         function updateCloudStatusUI(isOnline) {
-            const badge = document.getElementById('db-status-badge');
-            if(!badge) return;
+            const badgeContainer = document.getElementById('db-status-badge');
+            if(!badgeContainer) return;
             
             if(isOnline) {
-                badge.className = "flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200";
-                badge.innerHTML = `
-                    <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span>Database Online</span>
+                badgeContainer.innerHTML = `
+                    <div class="flex items-center space-x-2 bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200 shadow-sm">
+                        <span class="relative flex h-3 w-3">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <i class="fa-solid fa-fire text-green-600 relative inline-flex text-sm animate-pulse"></i>
+                        </span>
+                        <span class="ml-1">Google Sheet Connected (ไฟเขียว)</span>
+                    </div>
                 `;
             } else {
-                badge.className = "flex items-center space-x-2 bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200 animate-bounce";
-                badge.innerHTML = `
-                    <span class="h-2 w-2 rounded-full bg-red-500"></span>
-                    <span>Database Offline (เช็คการ Login Google)</span>
+                badgeContainer.innerHTML = `
+                    <div class="flex items-center space-x-2 bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200 shadow-sm animate-bounce">
+                        <i class="fa-solid fa-fire text-red-600 text-sm animate-pulse"></i>
+                        <span>Google Sheet Disconnected (ไฟแดง)</span>
+                    </div>
                 `;
             }
         }
@@ -839,9 +844,7 @@
             try {
                 const response = await fetch(CONFIG.API_URL, { 
                     method: "POST",
-                    headers: {
-                        "Content-Type": "text/plain;charset=utf-8" 
-                    },
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
                     body: JSON.stringify(payload)
                 });
                 
@@ -850,7 +853,6 @@
                     if (result.status === "success") {
                         updateCloudStatusUI(true);
                     } else {
-                        console.error("Apps Script Error:", result.message);
                         updateCloudStatusUI(false);
                     }
                 } else {
@@ -864,14 +866,10 @@
             }
         }
 
-        // 📊 ฟังก์ชันปรับปรุงใหม่: คำนวณสถิติและการ์ดหน้าแดชบอร์ดตามวันที่เลือกดูย้อนหลัง
         function updateDashboardCharts() {
             let active = 0, excluded = 0;
             const uMap = {};
-            
-            // ดึงค่าวันที่ต้องการกรองจากหน้าแดชบอร์ด UI (ถ้าไม่มีให้ยึดจากหน้าเช็คชื่อหลัก)
             const targetDate = document.getElementById('dashboard-date-filter')?.value || getSelectedDate();
-            
             let p=0, l=0, a=0, u=0;
 
             players.forEach(player => {
@@ -879,7 +877,6 @@
                 active++;
                 uMap[player.u] = (uMap[player.u] || 0) + 1;
                 
-                // ดึงสถานะการเช็คชื่อของนักกีฬาคนนั้นๆ ตามวันที่ถูกกำหนด
                 const s = attendanceDb[targetDate]?.[player.id]?.status || '-';
                 if(s === '✓') p++;
                 else if(s === 'ล') l++;
@@ -906,11 +903,7 @@
 
                 const legendLabels = sortedLabels.map(key => {
                     const count = uMap[key];
-                    if (key === "นักกีฬาใหม่") {
-                        return `นักกีฬาใหม่  ${count} คน`;
-                    } else {
-                        return `U${key}  ${count} คน`;
-                    }
+                    return key === "นักกีฬาใหม่" ? `นักกีฬาใหม่  ${count} คน` : `U${key}  ${count} คน`;
                 });
 
                 chartInstanceAge = new Chart(ctxAge.getContext('2d'), {
@@ -929,15 +922,7 @@
                             legend: {
                                 position: 'left', 
                                 align: 'center',  
-                                labels: {
-                                    boxWidth: 15, 
-                                    padding: 12,  
-                                    font: {
-                                        family: "'Kanit', sans-serif",
-                                        size: 13,
-                                        weight: 'normal'
-                                    }
-                                }
+                                labels: { boxWidth: 15, padding: 12, font: { family: "'Kanit', sans-serif", size: 13 } }
                             }
                         }
                     }
@@ -956,9 +941,14 @@
         }
 
         function saveToLocalStorage() {
-            localStorage.setItem('players', JSON.stringify(players));
-            localStorage.setItem('attendance', JSON.stringify(attendanceDb));
-            localStorage.setItem('specialStatus', JSON.stringify(specialStatusDb));
+            try {
+                localStorage.setItem('players', JSON.stringify(players));
+                localStorage.setItem('attendance', JSON.stringify(attendanceDb));
+                localStorage.setItem('specialStatus', JSON.stringify(specialStatusDb));
+            } catch (e) {
+                console.error("LocalStorage Storage Full Error:", e);
+                alert("⚠️ ไม่สามารถบันทึกลงหน่วยความจำเบราว์เซอร์ได้เนื่องจากข้อมูลเต็ม แนะนำให้กดปุ่ม 'บันทึกขึ้นคลาวด์' เพื่อเคลียร์ส่งข้อมูลไปยัง Google Sheets ครับ");
+            }
         }
 
         function showLoadingSpinner(val) { 
@@ -993,12 +983,40 @@
         }
 
         function closeProfileEditModal() { document.getElementById('profile-modal').classList.add('hidden'); }
+        
+        // 📸 ฟังก์ชันปรับปรุงใหม่: เพิ่มระบบบีบอัดรูปภาพอัตโนมัติก่อนแสดงผลและบันทึก เพื่อแก้ปัญหา LocalStorage เต็ม
         function previewAvatarImage(e) {
             const file = e.target.files[0];
             if(!file) return;
-            const r = new FileReader();
-            r.onload = function(evt) { document.getElementById('edit-profile-preview').src = evt.target.result; }
-            r.readAsDataURL(file);
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 160; // จำกัดขนาดกว้างยาวรูปภาพโปรไฟล์ให้พอดีและไฟล์เล็กมาก
+                    const MAX_HEIGHT = 160;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    } else {
+                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // บีบอัดคุณภาพไฟล์ JPEG เหลือ 70% ไฟล์จะลดลงเหลือไม่กี่ KB แต่ยังชัดเจนคมชัดบนระบบ
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    document.getElementById('edit-profile-preview').src = compressedDataUrl;
+                };
+                img.src = evt.target.result;
+            }
+            reader.readAsDataURL(file);
         }
     </script>
 </body>
