@@ -851,10 +851,53 @@
             const ctxAge = document.getElementById('chart-age-groups');
             if(ctxAge) {
                 if(chartInstanceAge) chartInstanceAge.destroy();
+
+                // 1. กำหนดลำดับที่ต้องการให้แสดงใน Legend จากบนลงล่าง
+                const desiredOrder = ["นักกีฬาใหม่", "12", "13", "14", "15", "16", "17", "18"];
+                
+                // คัดกรองเฉพาะรุ่นที่มีข้อมูลนักกีฬาอยู่จริงในระบบ ณ ขณะนั้น
+                const sortedLabels = desiredOrder.filter(key => uMap[key] !== undefined);
+                const sortedData = sortedLabels.map(key => uMap[key]);
+
+                // 2. ปรับแต่งคำอธิบายในแผงแถบสี (Legend Labels) ให้แสดงข้อความและจำนวนคนแยกแต่ละบรรทัด
+                const legendLabels = sortedLabels.map(key => {
+                    const count = uMap[key];
+                    if (key === "นักกีฬาใหม่") {
+                        return `นักกีฬาใหม่  ${count} คน`;
+                    } else {
+                        return `U${key}  ${count} คน`;
+                    }
+                });
+
+                // 3. สร้างกราฟวงกลม (Pie Chart) พร้อมกำหนดค่า Layout ให้อยู่ฝั่งซ้าย
                 chartInstanceAge = new Chart(ctxAge.getContext('2d'), {
                     type: 'pie',
-                    data: { labels: Object.keys(uMap).map(x=>"รุ่น U"+x), datasets: [{ data: Object.values(uMap), backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'] }] },
-                    options: { responsive: true, maintainAspectRatio: false }
+                    data: { 
+                        labels: legendLabels, // ใช้ป้ายชื่อที่จัดฟอร์แมตมีจำนวนคนแล้ว
+                        datasets: [{ 
+                            data: sortedData, 
+                            backgroundColor: ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#14B8A6'] 
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'left', // ย้ายแท่งสีบอกอายุมาไว้ฝั่งซ้ายมือ
+                                align: 'center',  // จัดกึ่งกลางในแนวตั้ง
+                                labels: {
+                                    boxWidth: 15, // ขนาดของกล่องสี
+                                    padding: 12,  // ระยะห่างระหว่างบรรทัด
+                                    font: {
+                                        family: "'Kanit', sans-serif",
+                                        size: 13,
+                                        weight: 'normal'
+                                    }
+                                }
+                            }
+                        }
+                    }
                 });
             }
 
